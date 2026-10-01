@@ -1,0 +1,70 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+  --qb-glass-rgb: 20, 22, 29;
+  --qb-border-rgb: 255, 255, 255;
+  --qb-glass-alpha: 0.08;
+  --qb-border-alpha: 0.16;
+  --qb-blur: 20px;
+  --qb-main-bg-a: #0e0e12;
+  --qb-main-bg-b: #151925;
+}
+
+:root[data-theme="midnight"] {
+  --qb-main-bg-a: #080d18;
+  --qb-main-bg-b: #102540;
+}
+
+:root[data-theme="violet"] {
+  --qb-main-bg-a: #140d1f;
+  --qb-main-bg-b: #2b1f45;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  background: transparent;
+}
+
+body {
+  font-family: "Segoe UI", system-ui, sans-serif;
+  color: #f5f5f7;
+}
+
+/* Main (non-overlay) window keeps an opaque backdrop. */
+body.window-main {
+  background: linear-gradient(160deg, var(--qb-main-bg-a) 0%, var(--qb-main-bg-b) 100%);
+}
+
+body.window-overlay,
+body.window-overlay #root {
+  overflow: hidden;
+}
+
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: 0.5rem;
+}
+
+/* Lets users drag the frameless overlay window by its background,
+   while interactive controls opt back out with .no-drag. */
+.drag-region {
+  -webkit-app-region: drag;
+}
+
+.no-drag {
+  -webkit-app-region: no-drag;
+}

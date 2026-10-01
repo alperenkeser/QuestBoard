@@ -1,0 +1,59 @@
+{
+  "name": "questboard",
+  "version": "0.1.0",
+  "description": "QuestBoard - a gamified quest/task overlay HUD app",
+  "main": "dist-electron/main.js",
+  "author": "",
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build && tsc -p electron/tsconfig.json && node scripts/copy-electron-assets.mjs",
+    "preview": "vite preview",
+    "electron:dev": "npm run build:electron && concurrently -k \"vite\" \"tsc -p electron/tsconfig.json --watch\" \"wait-on http://localhost:5173 dist-electron/main.js && cross-env VITE_DEV_SERVER_URL=http://localhost:5173 electron .\"",
+    "build:electron": "tsc -p electron/tsconfig.json && node scripts/copy-electron-assets.mjs",
+    "start": "electron .",
+    "postinstall": "electron-rebuild -f -w better-sqlite3"
+  },
+  "devDependencies": {
+    "@electron/rebuild": "^4.2.0",
+    "@types/better-sqlite3": "^9.6.0",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.1",
+    "autoprefixer": "^10.6.1",
+    "concurrently": "^8.2.2",
+    "cross-env": "^7.0.3",
+    "electron": "^31.0.2",
+    "electron-builder": "^24.13.3",
+    "postcss": "^8.5.28",
+    "tailwindcss": "^3.4.19",
+    "typescript": "^5.5.2",
+    "vite": "^5.3.1",
+    "wait-on": "^7.2.0"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.10.0",
+    "framer-motion": "^13.4.4",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "zustand": "^5.0.15"
+  },
+  "build": {
+    "appId": "com.questboard.app",
+    "productName": "QuestBoard",
+    "win": {
+      "icon": "assets/questboard-icon.ico"
+    },
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*"
+    ],
+    "directories": {
+      "output": "release"
+    }
+  },
+  "allowScripts": {
+    "better-sqlite3@11.10.0": true
+  }
+}

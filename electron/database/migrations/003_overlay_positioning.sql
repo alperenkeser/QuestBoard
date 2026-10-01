@@ -1,0 +1,3 @@
+ALTER TABLE settings ADD COLUMN overlayAnchor TEXT NOT NULL DEFAULT 'right-top';
+ALTER TABLE settings ADD COLUMN overlayX INTEGER;
+ALTER TABLE settings ADD COLUMN overlayY INTEGER;
