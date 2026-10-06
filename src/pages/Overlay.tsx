@@ -31,8 +31,9 @@ const SNAP_ANCHORS: OverlayAnchor[] = [
 function getSnapPoints(): Record<OverlayAnchor, { x: number; y: number }> {
   const sw = window.screen.availWidth;
   const sh = window.screen.availHeight;
-  const height = Math.min(OVERLAY_HEIGHT, sh - OVERLAY_MARGIN * 2);
-  const rightX = sw - OVERLAY_WIDTH - OVERLAY_MARGIN;
+  const width = Math.min(window.outerWidth || OVERLAY_WIDTH, sw - OVERLAY_MARGIN * 2);
+  const height = Math.min(window.outerHeight || OVERLAY_HEIGHT, sh - OVERLAY_MARGIN * 2);
+  const rightX = sw - width - OVERLAY_MARGIN;
   const leftX = OVERLAY_MARGIN;
   const topY = OVERLAY_MARGIN + 48;
   const middleY = Math.round((sh - height) / 2);
@@ -55,6 +56,7 @@ export function Overlay(): JSX.Element {
   const subtasksForQuest = useQuestStore((s) => s.subtasksForQuest);
   const toggleSubtask = useQuestStore((s) => s.toggleSubtask);
   const completeQuest = useQuestStore((s) => s.completeQuest);
+  const toggleOverlayPinned = useQuestStore((s) => s.toggleOverlayPinned);
   const lastXpEvents = useQuestStore((s) => s.lastXpEvents);
   const clearXpEvent = useQuestStore((s) => s.clearXpEvent);
   const maxVisibleQuests = useOverlayStore((s) => s.maxVisibleQuests);
@@ -85,12 +87,16 @@ export function Overlay(): JSX.Element {
     let lastHeight = 0;
     const reportHeight = () => {
       const height = Math.ceil(content.scrollHeight);
-      if (Math.abs(height - lastHeight) < 2) return;
+      const contentDoesNotFit = height > window.innerHeight + 2;
+      if (Math.abs(height - lastHeight) < 2 && !contentDoesNotFit) return;
       lastHeight = height;
       window.questboard.window.setOverlayContentHeight(height).catch(console.error);
     };
     const observer = new ResizeObserver(reportHeight);
     observer.observe(content);
+    if (content.firstElementChild instanceof HTMLElement) {
+      observer.observe(content.firstElementChild);
+    }
     reportHeight();
     return () => observer.disconnect();
   }, []);
@@ -131,6 +137,15 @@ export function Overlay(): JSX.Element {
 
   const onDragStart = (event: ReactMouseEvent<HTMLDivElement>) => {
     if (!dragEnabled) return;
+    const resizeEdge = 12;
+    if (
+      event.clientX <= resizeEdge ||
+      event.clientY <= resizeEdge ||
+      event.clientX >= window.innerWidth - resizeEdge ||
+      event.clientY >= window.innerHeight - resizeEdge
+    ) {
+      return;
+    }
     if ((event.target as HTMLElement).closest("button, input, textarea, select, a")) return;
     dragRef.current = {
       startMouseX: event.screenX,
@@ -211,12 +226,16 @@ export function Overlay(): JSX.Element {
   }, [updateSettings, snapPreview]);
 
   return (
-    <div ref={contentRef} className="flex w-full flex-col items-end gap-3 overflow-hidden p-3">
+    <div
+      ref={contentRef}
+      className="overlay-scrollbar-hidden flex max-h-screen w-full flex-col items-end gap-3 overflow-x-hidden overflow-y-auto p-3"
+      style={{ height: "max-content" }}
+    >
       <motion.div
         onMouseEnter={onInteractiveEnter}
         onMouseLeave={onInteractiveLeave}
         onMouseDown={onDragStart}
-        className={`no-drag flex w-full flex-col items-end gap-3 overflow-hidden ${
+        className={`group no-drag flex w-full shrink-0 flex-col items-end gap-3 overflow-hidden ${
           dragEnabled
             ? "cursor-grab rounded-2xl border border-dashed border-white/25 bg-black/10 p-2 active:cursor-grabbing"
             : ""
@@ -229,6 +248,7 @@ export function Overlay(): JSX.Element {
           dragEnabled={dragEnabled}
           collapsed={collapsed}
           alwaysOnTop={settings?.alwaysOnTop ?? true}
+          showIconsOnHover={settings?.showIconsOnHover ?? true}
           onToggleDrag={() => setDragEnabled(!dragEnabled)}
           onToggleCollapsed={() => setCollapsed(!collapsed)}
           onToggleAlwaysOnTop={onToggleAlwaysOnTop}
@@ -288,10 +308,13 @@ export function Overlay(): JSX.Element {
                           subtasks={subtasksForQuest(quest.id)}
                           onToggleSubtask={toggleSubtask}
                           onComplete={completeQuest}
+                          onRemoveFromOverlay={() => toggleOverlayPinned(quest.id, false)}
                           collapsed={Boolean(collapsedCards[quest.id])}
                           onToggleCollapsed={onToggleCardCollapsed}
                           xpEvents={lastXpEvents}
                           onXpEventConsumed={clearXpEvent}
+                          fontSize={settings?.fontSize ?? 14}
+                          showIconsOnHover={settings?.showIconsOnHover ?? true}
                         />
                       </motion.div>
                     ))}

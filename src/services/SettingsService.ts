@@ -21,6 +21,8 @@ function toSettings(row: SettingsRowDto): Settings {
     boardDoneLabel: row.boardDoneLabel,
     boardColumns,
     language: row.language,
+    showIconsOnHover: row.showIconsOnHover === 1,
+    fontSize: row.fontSize,
   };
 }
 
@@ -40,6 +42,8 @@ function toRowPatch(patch: Partial<Settings>): Partial<SettingsRowDto> {
     ...(patch.boardDoneLabel !== undefined && { boardDoneLabel: patch.boardDoneLabel }),
     ...(patch.boardColumns !== undefined && { boardColumns: JSON.stringify(patch.boardColumns) }),
     ...(patch.language !== undefined && { language: patch.language }),
+    ...(patch.showIconsOnHover !== undefined && { showIconsOnHover: patch.showIconsOnHover ? 1 : 0 }),
+    ...(patch.fontSize !== undefined && { fontSize: patch.fontSize }),
   };
 }
 

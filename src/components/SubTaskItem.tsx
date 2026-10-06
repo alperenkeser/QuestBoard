@@ -11,6 +11,7 @@ interface SubTaskItemProps {
   xpEvent?: XpFeedbackEvent;
   /** Called once the feedback has finished animating so the caller can clear it from the store. */
   onXpEventConsumed?: (subtaskId: string) => void;
+  fontSize?: number;
 }
 
 /**
@@ -23,6 +24,7 @@ export function SubTaskItem({
   onToggle,
   xpEvent,
   onXpEventConsumed,
+  fontSize = 14,
 }: SubTaskItemProps): JSX.Element {
   useEffect(() => {
     if (!xpEvent) return;
@@ -63,7 +65,10 @@ export function SubTaskItem({
           )}
         </AnimatePresence>
       </span>
-      <span className={subtask.completed ? "text-white/40 line-through" : ""}>
+      <span
+        className={subtask.completed ? "text-white/40 line-through" : ""}
+        style={{ fontSize }}
+      >
         {subtask.title}
       </span>
 

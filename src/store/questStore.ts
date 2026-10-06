@@ -7,6 +7,7 @@ import { QuestService } from "../services/QuestService";
 import { useUserStore } from "./userStore";
 import { useComboStore } from "./comboStore";
 import { useSettingsStore } from "./settingsStore";
+import { MAX_OVERLAY_QUESTS } from "./overlayStore";
 
 export type { QuestFormInput };
 
@@ -44,7 +45,7 @@ interface QuestState {
   completeQuest: (questId: string) => void;
   /** Moves a quest between workflow columns without XP side-effects. */
   moveQuestToStatus: (questId: string, columnId: string) => void;
-  toggleOverlayPinned: (questId: string, pinned: boolean) => void;
+  toggleOverlayPinned: (questId: string, pinned: boolean) => boolean;
 
   // Subtask mutations (used by both the overlay HUD and the Quest Manager)
   toggleSubtask: (subtaskId: string) => void;
@@ -264,6 +265,8 @@ export const useQuestStore = create<QuestState>((set, get) => ({
   completeQuest: (questId) => {
     const quest = get().quests.find((q) => q.id === questId);
     if (!quest || quest.status === "Completed") return;
+    const questSubtasks = get().subtasks.filter((subtask) => subtask.questId === questId);
+    if (questSubtasks.some((subtask) => !subtask.completed)) return;
     const completedColumn = useSettingsStore
       .getState()
       .settings?.boardColumns.find((column) => column.status === "Completed");
@@ -284,10 +287,13 @@ export const useQuestStore = create<QuestState>((set, get) => ({
     }));
     if (completedColumn) QuestService.setBoardColumn(questId, completedColumn.id).catch(console.error);
 
-    // No subtasks to distribute XP across, so the full reward is awarded here.
-    useUserStore.getState().addXp(quest.xpReward);
-    useUserStore.getState().incrementCompletedQuests();
-    useUserStore.getState().incrementDailyCompletedTasks();
+    // Subtask XP and completion stats were already awarded when the final
+    // subtask was checked. Only quests without subtasks need a manual award.
+    if (questSubtasks.length === 0) {
+      useUserStore.getState().addXp(quest.xpReward);
+      useUserStore.getState().incrementCompletedQuests();
+      useUserStore.getState().incrementDailyCompletedTasks();
+    }
   },
 
   moveQuestToStatus: (questId, columnId) => {
@@ -324,10 +330,16 @@ export const useQuestStore = create<QuestState>((set, get) => ({
   },
 
   toggleOverlayPinned: (questId, pinned) => {
+    const state = get();
+    const quest = state.quests.find((item) => item.id === questId);
+    if (!quest || (pinned && !quest.showInOverlay && state.quests.filter((item) => item.showInOverlay).length >= MAX_OVERLAY_QUESTS)) {
+      return false;
+    }
     set((state) => ({
       quests: state.quests.map((q) => (q.id === questId ? { ...q, showInOverlay: pinned } : q)),
     }));
     QuestService.setOverlayPinned(questId, pinned).catch(console.error);
+    return true;
   },
 
   toggleSubtask: (subtaskId) => {

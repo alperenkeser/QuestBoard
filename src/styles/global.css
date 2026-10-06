@@ -2,6 +2,15 @@
 @tailwind components;
 @tailwind utilities;
 
+.overlay-scrollbar-hidden {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.overlay-scrollbar-hidden::-webkit-scrollbar {
+  display: none;
+}
+
 :root {
   color-scheme: dark;
   --qb-glass-rgb: 20, 22, 29;

@@ -64,11 +64,13 @@ export function SettingsPage(): JSX.Element {
   const updateSettings = useSettingsStore((s) => s.updateSettings);
   const t = useTranslation();
   const [shortcutDraft, setShortcutDraft] = useState(settings?.shortcut ?? "");
+  const [fontSizeDraft, setFontSizeDraft] = useState(String(settings?.fontSize ?? 14));
   const [columnDraft, setColumnDraft] = useState<Settings["boardColumns"]>([]);
 
   useEffect(() => {
     if (settings) {
       setShortcutDraft(settings.shortcut);
+      setFontSizeDraft(String(settings.fontSize));
       setColumnDraft(settings.boardColumns);
     }
   }, [settings]);
@@ -91,6 +93,17 @@ export function SettingsPage(): JSX.Element {
     if (patch.shortcut !== undefined) {
       syncShortcutDraft(next);
     }
+  };
+
+  const saveFontSize = () => {
+    const parsed = Number(fontSizeDraft);
+    if (!Number.isFinite(parsed)) {
+      setFontSizeDraft(String(settings.fontSize));
+      return;
+    }
+    const fontSize = Math.min(36, Math.max(8, Math.round(parsed)));
+    setFontSizeDraft(String(fontSize));
+    if (fontSize !== settings.fontSize) updateAndSync({ fontSize });
   };
 
   const saveColumnTitle = (id: string, title: string) => {
@@ -143,6 +156,38 @@ export function SettingsPage(): JSX.Element {
             </p>
           </div>
           <div>
+            <label className="mb-1 block text-xs font-medium text-white/60">
+              {t("widgetFontSize")}
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                inputMode="numeric"
+                list="questboard-font-sizes"
+                value={fontSizeDraft}
+                onChange={(e) => setFontSizeDraft(e.target.value)}
+                onBlur={saveFontSize}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") e.currentTarget.blur();
+                }}
+                aria-label={t("widgetFontSize")}
+                className="w-20 rounded-md border border-hud-border bg-hud-bg px-2 py-2 text-sm text-white outline-none focus:border-sky-400/60"
+              />
+              <datalist id="questboard-font-sizes">
+                {[8, 9, 10, 11, 12, 14, 16, 18, 20, 22, 24, 26, 28, 36].map((size) => (
+                  <option key={size} value={size} />
+                ))}
+              </datalist>
+              <span
+                className="rounded-md border border-hud-border bg-white/5 px-3 py-1 text-white"
+                style={{ fontSize: `${Math.max(8, Number(fontSizeDraft) || 14)}px` }}
+                aria-hidden="true"
+              >
+                Aa
+              </span>
+            </div>
+          </div>
+          <div>
             <label className="mb-1 block text-xs font-medium text-white/60">{t("language")}</label>
             <select
               value={settings.language}
@@ -184,6 +229,12 @@ export function SettingsPage(): JSX.Element {
       </div>
 
       <div className="grid gap-3 md:grid-cols-2">
+        <ToggleRow
+          label={t("showIconsOnHover")}
+          description={t("showIconsOnHoverHint")}
+          checked={settings.showIconsOnHover}
+          onChange={(showIconsOnHover) => updateAndSync({ showIconsOnHover })}
+        />
         <ToggleRow
           label={t("alwaysOnTop")}
           description={t("alwaysOnTopHint")}

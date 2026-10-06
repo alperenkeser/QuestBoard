@@ -25,4 +25,6 @@ export interface Settings {
   boardDoneLabel: string;
   boardColumns: BoardColumn[];
   language: string;
+  showIconsOnHover: boolean;
+  fontSize: number;
 }

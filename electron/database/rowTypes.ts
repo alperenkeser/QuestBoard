@@ -39,6 +39,9 @@ export interface SettingsRow {
   boardDoneLabel: string;
   boardColumns: string;
   language: string;
+  showIconsOnHover: 0 | 1;
+  fontSize: number;
+  widgetShowInOverlay: 0 | 1;
 }
 
 export interface UserRow {

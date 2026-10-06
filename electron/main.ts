@@ -83,19 +83,21 @@ function moveOverlayWindow(x: number, y: number): void {
 
 function resolveOverlayPosition(
   settings: SettingsRow,
-  requestedHeight = OVERLAY_HEIGHT
-): { x: number; y: number; height: number } {
+  requestedHeight = overlayWindow?.getBounds().height ?? OVERLAY_HEIGHT,
+  requestedWidth = overlayWindow?.getBounds().width ?? OVERLAY_WIDTH
+): { x: number; y: number; width: number; height: number } {
   const { workArea } = screen.getPrimaryDisplay();
+  const width = Math.min(requestedWidth, workArea.width - OVERLAY_MARGIN * 2);
   const height = Math.min(requestedHeight, workArea.height - OVERLAY_MARGIN * 2);
 
   if (settings.overlayAnchor === "custom" && settings.overlayX !== null && settings.overlayY !== null) {
-    return { x: settings.overlayX, y: settings.overlayY, height };
+    return { x: settings.overlayX, y: settings.overlayY, width, height };
   }
 
   const isLeft = settings.overlayAnchor.startsWith("left");
   const x = isLeft
     ? workArea.x + OVERLAY_MARGIN
-    : workArea.x + workArea.width - OVERLAY_WIDTH - OVERLAY_MARGIN;
+    : workArea.x + workArea.width - width - OVERLAY_MARGIN;
 
   const yByAnchor: Record<string, number> = {
     "left-top": workArea.y + OVERLAY_MARGIN,
@@ -106,28 +108,33 @@ function resolveOverlayPosition(
     "right-bottom": workArea.y + workArea.height - height - OVERLAY_MARGIN,
   };
 
-  return { x, y: yByAnchor[settings.overlayAnchor] ?? workArea.y + OVERLAY_MARGIN, height };
+  return { x, y: yByAnchor[settings.overlayAnchor] ?? workArea.y + OVERLAY_MARGIN, width, height };
+}
+
+function setOverlayBounds(bounds: Electron.Rectangle): void {
+  if (!overlayWindow) return;
+  overlayWindow.setBounds(bounds);
 }
 
 function resizeOverlayToContent(requestedHeight: number): void {
   if (!overlayWindow || !Number.isFinite(requestedHeight)) return;
   const { workArea } = screen.getPrimaryDisplay();
-  const maxHeight = Math.max(120, workArea.height - OVERLAY_MARGIN * 2);
-  const height = Math.min(Math.max(120, Math.ceil(requestedHeight)), maxHeight);
+  const maxHeight = Math.max(220, workArea.height - OVERLAY_MARGIN * 2);
+  const height = Math.min(Math.max(220, Math.ceil(requestedHeight)), maxHeight);
   overlayContentHeight = height;
-  const nextPos = resolveOverlayPosition(SettingsRepository.get(), height);
-  overlayWindow.setBounds({
-    x: nextPos.x,
-    y: nextPos.y,
-    width: OVERLAY_WIDTH,
-    height: nextPos.height,
-  });
+  const nextPos = resolveOverlayPosition(
+    SettingsRepository.get(),
+    height,
+    overlayWindow.getBounds().width
+  );
+  setOverlayBounds(nextPos);
 }
 
 function applyRuntimeSettings(settings: SettingsRow): void {
   if (overlayWindow) {
-    const nextPos = resolveOverlayPosition(settings, overlayContentHeight);
-    overlayWindow.setBounds({ x: nextPos.x, y: nextPos.y, width: OVERLAY_WIDTH, height: nextPos.height });
+    const currentBounds = overlayWindow.getBounds();
+    const nextPos = resolveOverlayPosition(settings, currentBounds.height, currentBounds.width);
+    setOverlayBounds(nextPos);
     overlayWindow.setAlwaysOnTop(Boolean(settings.alwaysOnTop), "screen-saver");
     overlayWindow.setVisibleOnAllWorkspaces(Boolean(settings.alwaysOnTop), {
       visibleOnFullScreen: Boolean(settings.alwaysOnTop),
@@ -168,6 +175,7 @@ function applyRuntimeSettings(settings: SettingsRow): void {
 }
 
 function createOverlayWindow(settings: SettingsRow): void {
+  overlayContentHeight = OVERLAY_HEIGHT;
   const { x, y, height } = resolveOverlayPosition(settings);
 
   overlayWindow = new BrowserWindow({
@@ -175,12 +183,13 @@ function createOverlayWindow(settings: SettingsRow): void {
     y,
     width: OVERLAY_WIDTH,
     height,
-    minWidth: OVERLAY_WIDTH,
-    minHeight: 120,
+    minWidth: 280,
+    minHeight: 220,
     frame: false,
+    thickFrame: true,
     transparent: true,
     hasShadow: false,
-    resizable: false,
+    resizable: true,
     alwaysOnTop: Boolean(settings.alwaysOnTop),
     skipTaskbar: true,
     fullscreenable: false,

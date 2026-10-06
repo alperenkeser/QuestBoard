@@ -114,6 +114,15 @@ function sanitizeInput(input: UpdateSettingsInput): UpdateSettingsInput {
     ...(input.language !== undefined && {
       language: VALID_LANGUAGES.has(input.language) ? input.language : "tr",
     }),
+    ...(input.showIconsOnHover !== undefined && {
+      showIconsOnHover: input.showIconsOnHover ? 1 : 0,
+    }),
+    ...(input.fontSize !== undefined && {
+      fontSize: Math.round(clampNumber(input.fontSize, 8, 36)),
+    }),
+    ...(input.widgetShowInOverlay !== undefined && {
+      widgetShowInOverlay: input.widgetShowInOverlay ? 1 : 0,
+    }),
   };
 }
 
@@ -133,7 +142,8 @@ export const SettingsRepository = {
          alwaysOnTop=@alwaysOnTop, launchOnStartup=@launchOnStartup, shortcut=@shortcut,
          overlayAnchor=@overlayAnchor, overlayX=@overlayX, overlayY=@overlayY,
          boardBacklogLabel=@boardBacklogLabel, boardActiveLabel=@boardActiveLabel, boardDoneLabel=@boardDoneLabel,
-         boardColumns=@boardColumns, language=@language
+         boardColumns=@boardColumns, language=@language,
+         showIconsOnHover=@showIconsOnHover, fontSize=@fontSize, widgetShowInOverlay=@widgetShowInOverlay
          WHERE id = 1`
       )
       .run(next);

@@ -5,6 +5,7 @@ interface OverlayControlsProps {
   dragEnabled: boolean;
   collapsed: boolean;
   alwaysOnTop: boolean;
+  showIconsOnHover: boolean;
   onToggleDrag: () => void;
   onToggleCollapsed: () => void;
   onToggleAlwaysOnTop: () => void;
@@ -16,6 +17,7 @@ export function OverlayControls({
   dragEnabled,
   collapsed,
   alwaysOnTop,
+  showIconsOnHover,
   onToggleDrag,
   onToggleCollapsed,
   onToggleAlwaysOnTop,
@@ -24,12 +26,15 @@ export function OverlayControls({
 }: OverlayControlsProps): JSX.Element {
   const buttonBase =
     "no-drag grid h-8 w-8 place-items-center rounded-md text-white/55 transition-colors hover:bg-white/10 hover:text-white active:scale-95 active:bg-white/15 active:text-white";
+  const visibilityClass = showIconsOnHover
+    ? "pointer-events-none opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 focus-within:pointer-events-auto focus-within:opacity-100"
+    : "pointer-events-auto opacity-100";
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: -6 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="flex w-full items-center justify-between gap-3 px-1"
+      initial={{ y: -6 }}
+      animate={{ y: 0 }}
+      className={`flex w-full items-center justify-between gap-3 px-1 transition-opacity duration-150 ${visibilityClass}`}
     >
       <button
         type="button"

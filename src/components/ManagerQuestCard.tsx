@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import type { Quest, Subtask } from "../types";
 import type { XpFeedbackEvent } from "../store/questStore";
@@ -18,7 +18,8 @@ interface ManagerQuestCardProps {
   onRestore: (questId: string) => void;
   /** Marks a subtask-less quest Completed directly (awards its full XP reward). */
   onComplete: (questId: string) => void;
-  onToggleOverlayPinned: (questId: string, pinned: boolean) => void;
+  onToggleOverlayPinned: (questId: string, pinned: boolean) => boolean;
+  canPinToOverlay: boolean;
   /** subtaskId -> latest XP feedback event, for the floating "+N XP" / "Great Job!" animation. */
   xpEvents?: Record<string, XpFeedbackEvent>;
   onXpEventConsumed?: (subtaskId: string) => void;
@@ -39,71 +40,130 @@ export function ManagerQuestCard({
   onRestore,
   onComplete,
   onToggleOverlayPinned,
+  canPinToOverlay,
   xpEvents,
   onXpEventConsumed,
 }: ManagerQuestCardProps): JSX.Element {
   const t = useTranslation();
   const [expanded, setExpanded] = useState(quest.status === "Active");
+  const [showWidgetLimitNotice, setShowWidgetLimitNotice] = useState(false);
+  const widgetLimitNoticeTimeout = useRef<number | null>(null);
   const completedCount = subtasks.filter((s) => s.completed).length;
   const isCompleted = quest.status === "Completed";
   const isArchived = quest.status === "Archived";
-  const cardTone = isCompleted
-    ? "border-emerald-300/25 bg-emerald-400/[0.08]"
-    : isArchived
-      ? "border-slate-300/15 bg-slate-300/[0.06]"
-      : "border-sky-300/25 bg-sky-400/[0.08]";
+  const widgetLimitReached = !quest.showInOverlay && !canPinToOverlay;
+  const cardTone = quest.showInOverlay
+    ? "border-emerald-300/60"
+    : isCompleted
+      ? "border-emerald-300/25"
+      : isArchived
+        ? "border-slate-300/15"
+        : "border-sky-300/25";
+
+  useEffect(
+    () => () => {
+      if (widgetLimitNoticeTimeout.current !== null) {
+        window.clearTimeout(widgetLimitNoticeTimeout.current);
+      }
+    },
+    []
+  );
+
+  function handleWidgetToggle() {
+    if (widgetLimitReached) {
+      setShowWidgetLimitNotice(true);
+      if (widgetLimitNoticeTimeout.current !== null) {
+        window.clearTimeout(widgetLimitNoticeTimeout.current);
+      }
+      widgetLimitNoticeTimeout.current = window.setTimeout(
+        () => setShowWidgetLimitNotice(false),
+        3000
+      );
+      return;
+    }
+
+    setShowWidgetLimitNotice(false);
+    onToggleOverlayPinned(quest.id, !quest.showInOverlay);
+  }
 
   return (
     <motion.div
       layout
-      animate={{
-        boxShadow: quest.showInOverlay
-          ? "0 0 0 1px rgba(52,211,153,0.45), 0 0 22px rgba(16,185,129,0.2)"
-          : "0 8px 32px rgba(0,0,0,0.3)",
-      }}
-      transition={{ duration: 0.25, ease: "easeOut" }}
-      className={`w-full rounded-hud border p-3 backdrop-blur-hud transition-colors ${cardTone}`}
+      style={{ backgroundColor: "rgb(var(--qb-glass-rgb))" }}
+      className={`w-full rounded-hud border p-3 transition-colors ${cardTone}`}
     >
-      <div className="flex items-start justify-between gap-2">
-        <button
-          type="button"
-          onClick={() => setExpanded((v) => !v)}
-          className="flex min-w-0 flex-1 items-center gap-2 text-left"
-        >
-          <span className="text-white/50">{expanded ? "▼" : "▶️"}</span>
-          <PriorityIndicator priority={quest.priority} />
-          <span className="truncate text-sm font-semibold text-white">{quest.title}</span>
-        </button>
-        <div className="flex items-center gap-2">
-          {!isArchived && (
-          <motion.button
+      <div className="flex flex-col gap-2">
+        <div className="flex min-w-0 items-center justify-between gap-2">
+          <button
             type="button"
-            onClick={() => onToggleOverlayPinned(quest.id, !quest.showInOverlay)}
-            title={quest.showInOverlay ? t("widgetHide") : t("widgetShow")}
-            aria-label={quest.showInOverlay ? t("widgetHide") : t("widgetShow")}
-            aria-pressed={quest.showInOverlay}
-            whileTap={{ scale: 0.94 }}
-            animate={{
-              backgroundColor: quest.showInOverlay ? "rgba(16,185,129,0.28)" : "rgba(255,255,255,0.08)",
-              color: quest.showInOverlay ? "#d1fae5" : "rgba(255,255,255,0.65)",
-            }}
-            transition={{ duration: 0.2 }}
-            className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-semibold ${
-              quest.showInOverlay
-                ? "border-emerald-300/70 shadow-[0_0_14px_rgba(16,185,129,0.25)]"
-                : "border-hud-border hover:text-white"
-            }`}
+            onClick={() => setExpanded((v) => !v)}
+            className="flex min-w-0 flex-1 items-center gap-2 text-left"
           >
-            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <rect x="3" y="4" width="18" height="13" rx="2" />
-              <path d="M8 21h8M12 17v4" />
-            </svg>
-            {t("widget")}
-          </motion.button>
+            <span className="shrink-0 text-white/50">{expanded ? "▼" : "▶️"}</span>
+            <PriorityIndicator priority={quest.priority} />
+            <span className="truncate text-sm font-semibold text-white">{quest.title}</span>
+          </button>
+          {!isArchived && (
+            <motion.button
+              type="button"
+              onClick={handleWidgetToggle}
+              title={
+                widgetLimitReached
+                  ? t("widgetLimitReached")
+                  : quest.showInOverlay
+                    ? t("widgetHide")
+                    : t("widgetShow")
+              }
+              aria-label={
+                widgetLimitReached
+                  ? t("widgetLimitReached")
+                  : quest.showInOverlay
+                    ? t("widgetHide")
+                    : t("widgetShow")
+              }
+              aria-disabled={widgetLimitReached}
+              aria-pressed={quest.showInOverlay}
+              whileTap={{ scale: 0.94 }}
+              animate={{
+                backgroundColor: quest.showInOverlay ? "rgba(16,185,129,0.28)" : "rgba(255,255,255,0.08)",
+                color: quest.showInOverlay ? "#d1fae5" : "rgba(255,255,255,0.65)",
+              }}
+              transition={{ duration: 0.2 }}
+              className={`flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-semibold ${
+                quest.showInOverlay
+                  ? "border-emerald-300/70 shadow-[0_0_14px_rgba(16,185,129,0.25)]"
+                  : widgetLimitReached
+                    ? "cursor-pointer border-amber-300/40 hover:text-amber-100"
+                    : "border-hud-border hover:text-white"
+              }`}
+            >
+              <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <rect x="3" y="4" width="18" height="13" rx="2" />
+                <path d="M8 21h8M12 17v4" />
+              </svg>
+              {t("widget")}
+            </motion.button>
           )}
+        </div>
+        <div className="flex justify-end">
           <DifficultyBadge difficulty={quest.difficulty} variant="full" />
         </div>
       </div>
+
+      <AnimatePresence initial={false}>
+        {showWidgetLimitNotice && (
+          <motion.p
+            role="status"
+            aria-live="polite"
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            className="mt-2 overflow-hidden rounded-md border border-amber-300/25 bg-amber-300/10 px-2 py-1.5 text-xs text-amber-100"
+          >
+            {t("widgetLimitReached")}
+          </motion.p>
+        )}
+      </AnimatePresence>
 
       <div className="mt-2 flex items-center gap-3 text-xs text-white/60">
         <span>{quest.priority} {t("prioritySuffix")}</span>

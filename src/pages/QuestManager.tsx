@@ -13,6 +13,7 @@ import { DailySummary } from "../components/DailySummary";
 import { ComboBadge } from "../components/ComboBadge";
 import { SettingsPage } from "./SettingsPage";
 import { useSettingsStore } from "../store/settingsStore";
+import { MAX_OVERLAY_QUESTS } from "../store/overlayStore";
 import { useTranslation } from "../i18n";
 import { QuestBoardIcon } from "../components/QuestBoardIcon";
 
@@ -80,9 +81,14 @@ export function QuestManager(): JSX.Element {
   }
 
   const boardColumns = settings?.boardColumns ?? [];
+  const overlayQuestCount = quests.filter((quest) => quest.showInOverlay).length;
+  const canPinToOverlay = overlayQuestCount < MAX_OVERLAY_QUESTS;
 
   return (
-    <div className="mx-auto flex h-full w-full max-w-[1600px] flex-col gap-4 p-6">
+    <div
+      className="mx-auto flex h-full w-full max-w-[1600px] flex-col gap-4 p-6"
+      style={{ backgroundColor: "var(--qb-main-bg-a)" }}
+    >
       <div className="flex items-center justify-between gap-3">
         <h1 className="flex items-center gap-2 text-xl font-bold text-white">
           <QuestBoardIcon className="h-7 w-7" />
@@ -93,9 +99,10 @@ export function QuestManager(): JSX.Element {
           <button
             type="button"
             onClick={() => window.questboard.window.focusOverlay().catch(console.error)}
+            title={`${overlayQuestCount}/${MAX_OVERLAY_QUESTS} ${t("widget")}`}
             className="rounded-lg border border-hud-border bg-hud-bg px-3 py-1.5 text-sm font-semibold text-white/85 hover:bg-white/15"
           >
-            {t("widget")}
+            {t("widget")} ({overlayQuestCount}/{MAX_OVERLAY_QUESTS})
           </button>
           <button
             type="button"
@@ -175,10 +182,10 @@ export function QuestManager(): JSX.Element {
               {boardColumns.map((column) => {
                 const columnTone =
                   column.status === "Archived"
-                    ? "border-slate-400/25 bg-slate-500/[0.09]"
+                    ? "border-slate-400/25 bg-[#191d26]"
                     : column.status === "Active"
-                      ? "border-blue-400/30 bg-blue-500/[0.11]"
-                      : "border-green-400/30 bg-green-500/[0.11]";
+                      ? "border-blue-400/30 bg-[#111e30]"
+                      : "border-green-400/30 bg-[#10231e]";
                 const headingTone =
                   column.status === "Archived"
                     ? "text-slate-200/80"
@@ -201,7 +208,7 @@ export function QuestManager(): JSX.Element {
                     onDrop={() => handleDrop(column.id)}
                     className={`min-w-0 rounded-xl border p-3 transition-colors ${
                       dropTarget === column.id
-                        ? "border-sky-300/60 bg-sky-400/10"
+                        ? "border-sky-300/60 bg-[#17243a]"
                         : columnTone
                     }`}
                     variants={{
@@ -238,6 +245,7 @@ export function QuestManager(): JSX.Element {
                               onRestore={restoreQuest}
                               onComplete={completeQuest}
                               onToggleOverlayPinned={toggleOverlayPinned}
+                              canPinToOverlay={canPinToOverlay}
                               xpEvents={lastXpEvents}
                               onXpEventConsumed={clearXpEvent}
                             />

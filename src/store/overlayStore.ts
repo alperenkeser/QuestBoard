@@ -1,5 +1,7 @@
 import { create } from "zustand";
 
+export const MAX_OVERLAY_QUESTS = 3;
+
 interface OverlayState {
   maxVisibleQuests: number;
   dragEnabled: boolean;
@@ -10,7 +12,7 @@ interface OverlayState {
 
 // Settings page (Phase 7) will make maxVisibleQuests and overlay position configurable.
 export const useOverlayStore = create<OverlayState>((set) => ({
-  maxVisibleQuests: 4,
+  maxVisibleQuests: MAX_OVERLAY_QUESTS,
   dragEnabled: false,
   collapsed: false,
   setDragEnabled: (enabled) => set({ dragEnabled: enabled }),

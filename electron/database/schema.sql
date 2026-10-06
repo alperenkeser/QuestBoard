@@ -62,7 +62,10 @@ CREATE TABLE IF NOT EXISTS settings (
   boardActiveLabel TEXT NOT NULL DEFAULT 'Aktif Görevler',
   boardDoneLabel TEXT NOT NULL DEFAULT 'Tamamlanan Görevler',
   boardColumns TEXT NOT NULL DEFAULT '[{"id":"backlog","title":"Görevler","status":"Archived"},{"id":"active","title":"Aktif Görevler","status":"Active"},{"id":"completed","title":"Tamamlanan Görevler","status":"Completed"}]',
-  language TEXT NOT NULL DEFAULT 'tr'
+  language TEXT NOT NULL DEFAULT 'tr',
+  showIconsOnHover INTEGER NOT NULL DEFAULT 1,
+  fontSize INTEGER NOT NULL DEFAULT 14,
+  widgetShowInOverlay INTEGER NOT NULL DEFAULT 1
 );
 
 CREATE TABLE IF NOT EXISTS achievements (
