@@ -78,6 +78,55 @@ export interface QuestFormPayloadDto {
   status: string;
 }
 
+export interface AzureDevOpsConnectionDto {
+  sprintUrl: string;
+  wiqlUrl: string;
+  workItemsBatchUrl: string;
+  username: string;
+  hasSavedCredentials: boolean;
+}
+
+export interface AzureDevOpsConnectRequestDto {
+  sprintUrl: string;
+  wiqlUrl: string;
+  workItemsBatchUrl: string;
+  username: string;
+  password: string;
+}
+
+export interface AzureDevOpsSprintDto {
+  id: string;
+  name: string;
+  path: string;
+  startDate: string | null;
+  finishDate: string | null;
+}
+
+export interface AzureDevOpsTaskDto {
+  id: number;
+  title: string;
+  state: string;
+  assignedTo: string;
+  iterationPath: string;
+  description: string;
+  originalEstimate: number | null;
+  remainingWork: number | null;
+  completedWork: number | null;
+  url: string;
+}
+
+export interface AzureDevOpsTestResultDto {
+  connection: AzureDevOpsConnectionDto;
+  sprint: AzureDevOpsSprintDto;
+}
+
+export interface AzureDevOpsSyncResultDto {
+  connection: AzureDevOpsConnectionDto;
+  sprint: AzureDevOpsSprintDto;
+  tasks: AzureDevOpsTaskDto[];
+  fetchedAt: string;
+}
+
 export interface QuestBoardBridge {
   version: string;
   db: {
@@ -105,6 +154,12 @@ export interface QuestBoardBridge {
       addXp: (amount: number) => Promise<UserRowDto>;
       incrementCompletedQuests: () => Promise<UserRowDto>;
       incrementDailyCompletedTasks: () => Promise<UserRowDto>;
+    };
+    azureDevOps: {
+      getConnection: () => Promise<AzureDevOpsConnectionDto>;
+      testConnection: (input: AzureDevOpsConnectRequestDto) => Promise<AzureDevOpsTestResultDto>;
+      synchronize: (input: AzureDevOpsConnectRequestDto) => Promise<AzureDevOpsSyncResultDto>;
+      disconnect: () => Promise<void>;
     };
   };
   window: {

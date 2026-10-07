@@ -6,6 +6,12 @@ import { UserRepository } from "./repositories/UserRepository";
 import { generateId } from "./utils/id";
 import { assertTrustedIpcSender } from "./security";
 import type { SettingsRow } from "./database/rowTypes";
+import {
+  disconnectAzureDevOps,
+  getAzureDevOpsConnection,
+  synchronizeAzureDevOps,
+  testAzureDevOpsConnection,
+} from "./azureDevOps";
 
 export interface QuestFormPayload {
   title: string;
@@ -219,6 +225,26 @@ export function registerIpcHandlers(options: RegisterIpcHandlersOptions = {}): v
     options.onSettingsUpdated?.(updated);
     broadcastDbChanged();
     return updated;
+  });
+
+  ipcMain.handle("azureDevOps:getConnection", (event) => {
+    assertTrustedIpcSender(event);
+    return getAzureDevOpsConnection();
+  });
+
+  ipcMain.handle("azureDevOps:testConnection", (event, input: unknown) => {
+    assertTrustedIpcSender(event);
+    return testAzureDevOpsConnection(input);
+  });
+
+  ipcMain.handle("azureDevOps:synchronize", (event, input: unknown) => {
+    assertTrustedIpcSender(event);
+    return synchronizeAzureDevOps(input);
+  });
+
+  ipcMain.handle("azureDevOps:disconnect", (event) => {
+    assertTrustedIpcSender(event);
+    disconnectAzureDevOps();
   });
 
   ipcMain.handle("user:get", (event) => {

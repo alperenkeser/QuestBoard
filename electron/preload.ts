@@ -35,6 +35,12 @@ contextBridge.exposeInMainWorld("questboard", {
       incrementCompletedQuests: () => ipcRenderer.invoke("user:incrementCompletedQuests"),
       incrementDailyCompletedTasks: () => ipcRenderer.invoke("user:incrementDailyCompletedTasks"),
     },
+    azureDevOps: {
+      getConnection: () => ipcRenderer.invoke("azureDevOps:getConnection"),
+      testConnection: (input: unknown) => ipcRenderer.invoke("azureDevOps:testConnection", input),
+      synchronize: (input: unknown) => ipcRenderer.invoke("azureDevOps:synchronize", input),
+      disconnect: () => ipcRenderer.invoke("azureDevOps:disconnect"),
+    },
   },
   window: {
     minimizeSelf: () => ipcRenderer.invoke("window:minimizeSelf"),

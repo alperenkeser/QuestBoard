@@ -4,6 +4,7 @@ import { useSettingsStore } from "../store/settingsStore";
 import type { OverlayAnchor, Settings, ThemeName } from "../types";
 import { useTranslation } from "../i18n";
 import { PriorityIndicator } from "../components/PriorityIndicator";
+import { AzureDevOpsPanel } from "../components/AzureDevOpsPanel";
 
 const THEMES: Array<{ value: ThemeName; label: string; hint: string }> = [
   { value: "dark", label: "Dark", hint: "Balanced neutral glass" },
@@ -360,6 +361,8 @@ export function SettingsPage(): JSX.Element {
           </button>
         </div>
       </div>
+
+      <AzureDevOpsPanel />
 
       <div className="rounded-xl border border-hud-border bg-hud-bg p-4 backdrop-blur-hud">
         <div className="grid gap-4 md:grid-cols-2">

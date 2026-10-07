@@ -14,6 +14,10 @@ A gamified quest/task overlay HUD desktop app built with Electron, React, and Ty
 - `npm run build` — type-check and build both renderer and Electron main process.
 - `npm start` — launch the built Electron app (run `build` first).
 
+## Azure DevOps
+
+Open **Settings → Azure DevOps**, enter the sprint, WIQL, and work-item batch API URLs plus the Basic Auth username and PAT/password. **Test connection** checks the sprint endpoint and, on success, loads the current sprint and tasks assigned to the authenticated user. **Synchronize** reconnects and fetches the latest data. Credentials are encrypted with Electron `safeStorage` and kept locally on this device; use **Forget credentials** to remove them.
+
 ## Roadmap
 
 1. ✅ Electron + React + TypeScript scaffold
