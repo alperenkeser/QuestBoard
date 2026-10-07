@@ -16,7 +16,11 @@ A gamified quest/task overlay HUD desktop app built with Electron, React, and Ty
 
 ## Azure DevOps
 
-Open **Settings → Azure DevOps**, enter the sprint, WIQL, and work-item batch API URLs plus the Basic Auth username and PAT/password. **Test connection** checks the sprint endpoint and, on success, loads the current sprint and tasks assigned to the authenticated user. **Synchronize** reconnects and fetches the latest data. Credentials are encrypted with Electron `safeStorage` and kept locally on this device; use **Forget credentials** to remove them.
+Open **Quest Manager → Sprint boards → Connect Azure** to enter the sprint, WIQL, and work-item batch API URLs plus the Basic Auth username and PAT/password in a popup. The connection previews available sprints and tasks, selecting the current sprint by default. Choose individual tasks or transfer all fetched tasks into that sprint's separate board. Selecting another sprint previews its tasks; Sprint Boards stay separate from regular quests.
+
+Transferred sprint and task data are stored in SQLite. Repeated imports match work items by Azure ID, update Azure-owned title/description/date/status fields, and preserve local subtasks and quest settings. Imports do not award or remove XP. Credentials are encrypted with Electron `safeStorage` and kept locally on this device; Basic Auth requests run in Electron's main process over HTTPS. Use **Forget credentials** to remove them.
+
+Run `npm run test:azure-sprints` to execute the mock API and SQLite synchronization tests.
 
 ## Roadmap
 

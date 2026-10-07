@@ -18,6 +18,8 @@ function toQuest(row: QuestRowDto): Omit<Quest, "completionPercentage"> {
     showInOverlay: row.showInOverlay === 1,
     boardColumnId: row.boardColumnId,
     boardOrder: row.boardOrder,
+    azureSprintBoardId: row.azureSprintBoardId,
+    azureWorkItemId: row.azureWorkItemId,
   };
 }
 

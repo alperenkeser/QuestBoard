@@ -13,6 +13,23 @@ export interface QuestRow {
   showInOverlay: 0 | 1;
   boardColumnId: string;
   boardOrder: number;
+  azureSprintBoardId: string | null;
+  azureSourceKey: string | null;
+  azureWorkItemId: string | null;
+}
+
+export interface AzureSprintBoardRow {
+  id: string;
+  sourceKey: string;
+  remoteId: string;
+  name: string;
+  path: string;
+  startDate: string | null;
+  finishDate: string | null;
+  timeFrame: string;
+  lastSyncedDate: string | null;
+  createdDate: string;
+  updatedDate: string;
 }
 
 export interface SubtaskRow {

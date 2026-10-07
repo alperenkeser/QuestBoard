@@ -8,8 +8,10 @@ import { assertTrustedIpcSender } from "./security";
 import type { SettingsRow } from "./database/rowTypes";
 import {
   disconnectAzureDevOps,
+  getAzureSprintBoards,
   getAzureDevOpsConnection,
-  synchronizeAzureDevOps,
+  importAzureDevOpsTasks,
+  previewAzureDevOpsSprint,
   testAzureDevOpsConnection,
 } from "./azureDevOps";
 
@@ -237,10 +239,25 @@ export function registerIpcHandlers(options: RegisterIpcHandlersOptions = {}): v
     return testAzureDevOpsConnection(input);
   });
 
-  ipcMain.handle("azureDevOps:synchronize", (event, input: unknown) => {
+  ipcMain.handle("azureDevOps:getSprintBoards", (event) => {
     assertTrustedIpcSender(event);
-    return synchronizeAzureDevOps(input);
+    return getAzureSprintBoards();
   });
+
+  ipcMain.handle("azureDevOps:previewSprint", async (event, input: unknown, sprintId: unknown) => {
+    assertTrustedIpcSender(event);
+    return previewAzureDevOpsSprint(input, sprintId);
+  });
+
+  ipcMain.handle(
+    "azureDevOps:importTasks",
+    (event, previewId: unknown, selectedTaskIds: unknown) => {
+      assertTrustedIpcSender(event);
+      const result = importAzureDevOpsTasks(previewId, selectedTaskIds);
+      broadcastDbChanged();
+      return result;
+    }
+  );
 
   ipcMain.handle("azureDevOps:disconnect", (event) => {
     assertTrustedIpcSender(event);

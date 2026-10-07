@@ -18,6 +18,8 @@ export interface QuestRowDto {
   showInOverlay: 0 | 1;
   boardColumnId: string;
   boardOrder: number;
+  azureSprintBoardId: string | null;
+  azureWorkItemId: string | null;
 }
 
 export interface SubtaskRowDto {
@@ -100,6 +102,7 @@ export interface AzureDevOpsSprintDto {
   path: string;
   startDate: string | null;
   finishDate: string | null;
+  timeFrame: "past" | "current" | "future" | "unknown";
 }
 
 export interface AzureDevOpsTaskDto {
@@ -117,14 +120,35 @@ export interface AzureDevOpsTaskDto {
 
 export interface AzureDevOpsTestResultDto {
   connection: AzureDevOpsConnectionDto;
-  sprint: AzureDevOpsSprintDto;
+  sprints: AzureDevOpsSprintDto[];
+  activeSprintId: string | null;
 }
 
 export interface AzureDevOpsSyncResultDto {
   connection: AzureDevOpsConnectionDto;
+  previewId: string;
+  sprints: AzureDevOpsSprintDto[];
+  activeSprintId: string | null;
   sprint: AzureDevOpsSprintDto;
   tasks: AzureDevOpsTaskDto[];
   fetchedAt: string;
+}
+
+export interface AzureDevOpsImportResultDto {
+  board: AzureSprintBoardDto;
+  importedCount: number;
+  boards: AzureSprintBoardDto[];
+}
+
+export interface AzureSprintBoardDto {
+  id: string;
+  remoteId: string;
+  name: string;
+  path: string;
+  startDate: string | null;
+  finishDate: string | null;
+  timeFrame: "past" | "current" | "future" | "unknown";
+  lastSyncedDate: string | null;
 }
 
 export interface QuestBoardBridge {
@@ -158,7 +182,15 @@ export interface QuestBoardBridge {
     azureDevOps: {
       getConnection: () => Promise<AzureDevOpsConnectionDto>;
       testConnection: (input: AzureDevOpsConnectRequestDto) => Promise<AzureDevOpsTestResultDto>;
-      synchronize: (input: AzureDevOpsConnectRequestDto) => Promise<AzureDevOpsSyncResultDto>;
+      getSprintBoards: () => Promise<AzureSprintBoardDto[]>;
+      previewSprint: (
+        input: AzureDevOpsConnectRequestDto,
+        sprintId: string
+      ) => Promise<AzureDevOpsSyncResultDto>;
+      importTasks: (
+        previewId: string,
+        selectedTaskIds: number[]
+      ) => Promise<AzureDevOpsImportResultDto>;
       disconnect: () => Promise<void>;
     };
   };

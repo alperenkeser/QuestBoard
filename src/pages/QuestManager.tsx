@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import type { Quest } from "../types";
 import { useQuestStore, type QuestFormInput } from "../store/questStore";
@@ -16,8 +16,9 @@ import { useSettingsStore } from "../store/settingsStore";
 import { MAX_OVERLAY_QUESTS } from "../store/overlayStore";
 import { useTranslation } from "../i18n";
 import { QuestBoardIcon } from "../components/QuestBoardIcon";
+import { SprintBoardView } from "../components/SprintBoardView";
 
-type ManagerView = "quests" | "settings";
+type ManagerView = "quests" | "sprints" | "settings";
 
 export function QuestManager(): JSX.Element {
   const quests = useQuestStore((s) => s.quests);
@@ -43,15 +44,30 @@ export function QuestManager(): JSX.Element {
   const [editingQuest, setEditingQuest] = useState<Quest | null>(null);
   const [draggingQuestId, setDraggingQuestId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<string | null>(null);
+  const [requestedSprintBoardId, setRequestedSprintBoardId] = useState("");
+  const normalQuests = useMemo(() => quests.filter((quest) => quest.azureSprintBoardId === null), [quests]);
+  const sprintLabel = settings?.language === "tr" ? "Sprint Board" : "Sprint boards";
+
+  useEffect(() => {
+    const handleSprintBoardSelected = (event: Event) => {
+      const boardId = (event as CustomEvent<string>).detail;
+      if (typeof boardId === "string") {
+        setRequestedSprintBoardId(boardId);
+        setView("sprints");
+      }
+    };
+    window.addEventListener("azure-sprint-board-selected", handleSprintBoardSelected);
+    return () => window.removeEventListener("azure-sprint-board-selected", handleSprintBoardSelected);
+  }, []);
 
   const searched = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return quests;
-    return quests.filter(
+    if (!q) return normalQuests;
+    return normalQuests.filter(
       (quest) =>
         quest.title.toLowerCase().includes(q) || quest.description.toLowerCase().includes(q)
     );
-  }, [quests, search]);
+  }, [normalQuests, search]);
 
   function openCreateForm() {
     setEditingQuest(null);
@@ -130,6 +146,22 @@ export function QuestManager(): JSX.Element {
             />
           )}
           <span className="relative">{t("quests")}</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setView("sprints")}
+          className={`relative rounded-md px-4 py-1.5 text-sm font-medium transition-colors ${
+            view === "sprints" ? "text-sky-200" : "text-white/65 hover:text-white"
+          }`}
+        >
+          {view === "sprints" && (
+            <motion.span
+              layoutId="manager-nav-pill"
+              className="absolute inset-0 rounded-md bg-sky-400/20"
+              transition={{ type: "spring", stiffness: 320, damping: 26 }}
+            />
+          )}
+          <span className="relative">{sprintLabel}</span>
         </button>
         <button
           type="button"
@@ -257,6 +289,17 @@ export function QuestManager(): JSX.Element {
                 );
               })}
             </motion.div>
+          </motion.div>
+        ) : view === "sprints" ? (
+          <motion.div
+            key="sprints-view"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.2, ease: "easeOut" }}
+            className="flex min-h-0 flex-1 flex-col overflow-y-auto pb-6"
+          >
+            <SprintBoardView requestedBoardId={requestedSprintBoardId} />
           </motion.div>
         ) : (
           <motion.div

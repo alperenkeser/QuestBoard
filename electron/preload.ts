@@ -38,7 +38,11 @@ contextBridge.exposeInMainWorld("questboard", {
     azureDevOps: {
       getConnection: () => ipcRenderer.invoke("azureDevOps:getConnection"),
       testConnection: (input: unknown) => ipcRenderer.invoke("azureDevOps:testConnection", input),
-      synchronize: (input: unknown) => ipcRenderer.invoke("azureDevOps:synchronize", input),
+      getSprintBoards: () => ipcRenderer.invoke("azureDevOps:getSprintBoards"),
+      previewSprint: (input: unknown, sprintId: string) =>
+        ipcRenderer.invoke("azureDevOps:previewSprint", input, sprintId),
+      importTasks: (previewId: string, selectedTaskIds: number[]) =>
+        ipcRenderer.invoke("azureDevOps:importTasks", previewId, selectedTaskIds),
       disconnect: () => ipcRenderer.invoke("azureDevOps:disconnect"),
     },
   },

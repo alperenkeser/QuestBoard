@@ -18,6 +18,21 @@ CREATE TABLE IF NOT EXISTS users (
   updatedDate TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS azure_sprint_boards (
+  id TEXT PRIMARY KEY,
+  sourceKey TEXT NOT NULL,
+  remoteId TEXT NOT NULL,
+  name TEXT NOT NULL,
+  path TEXT NOT NULL,
+  startDate TEXT,
+  finishDate TEXT,
+  timeFrame TEXT NOT NULL DEFAULT 'unknown',
+  lastSyncedDate TEXT,
+  createdDate TEXT NOT NULL,
+  updatedDate TEXT NOT NULL,
+  UNIQUE (sourceKey, remoteId)
+);
+
 CREATE TABLE IF NOT EXISTS quests (
   id TEXT PRIMARY KEY,
   title TEXT NOT NULL,
@@ -32,10 +47,19 @@ CREATE TABLE IF NOT EXISTS quests (
   dueDate TEXT,
   showInOverlay INTEGER NOT NULL DEFAULT 0,
   boardColumnId TEXT NOT NULL DEFAULT 'active',
-  boardOrder INTEGER NOT NULL DEFAULT 0
+  boardOrder INTEGER NOT NULL DEFAULT 0,
+  azureSprintBoardId TEXT REFERENCES azure_sprint_boards (id) ON DELETE SET NULL,
+  azureSourceKey TEXT,
+  azureWorkItemId TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_quests_status ON quests (status);
+CREATE INDEX IF NOT EXISTS idx_azure_sprint_boards_source
+  ON azure_sprint_boards (sourceKey, timeFrame);
+CREATE INDEX IF NOT EXISTS idx_quests_azure_sprint_board ON quests (azureSprintBoardId);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_quests_azure_work_item
+  ON quests (azureSourceKey, azureWorkItemId)
+  WHERE azureSourceKey IS NOT NULL AND azureWorkItemId IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS subtasks (
   id TEXT PRIMARY KEY,

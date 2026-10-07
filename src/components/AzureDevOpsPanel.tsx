@@ -1,8 +1,11 @@
 import { useEffect, useState } from "react";
 import type {
   AzureDevOpsConnectRequestDto,
+  AzureDevOpsSprintDto,
+  AzureDevOpsImportResultDto,
   AzureDevOpsSyncResultDto,
   AzureDevOpsConnectionDto,
+  AzureSprintBoardDto,
 } from "../types/bridge";
 import { useSettingsStore } from "../store/settingsStore";
 
@@ -24,7 +27,11 @@ function formatDate(value: string | null, locale: string): string {
   return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString(locale);
 }
 
-export function AzureDevOpsPanel(): JSX.Element {
+export function AzureDevOpsPanel({
+  onImported,
+}: {
+  onImported?: () => void;
+}): JSX.Element {
   const language = useSettingsStore((state) => state.settings?.language ?? "en");
   const isTurkish = language === "tr";
   const [form, setForm] = useState<AzureDevOpsConnectRequestDto>({
@@ -36,6 +43,12 @@ export function AzureDevOpsPanel(): JSX.Element {
   });
   const [connection, setConnection] = useState(EMPTY_CONNECTION);
   const [result, setResult] = useState<AzureDevOpsSyncResultDto | null>(null);
+  const [sprints, setSprints] = useState<AzureDevOpsSprintDto[]>([]);
+  const [sprintListLoaded, setSprintListLoaded] = useState(false);
+  const [selectedSprintId, setSelectedSprintId] = useState("");
+  const [boards, setBoards] = useState<AzureSprintBoardDto[]>([]);
+  const [selectedTaskIds, setSelectedTaskIds] = useState<number[]>([]);
+  const [importing, setImporting] = useState(false);
   const [phase, setPhase] = useState<"idle" | "testing" | "fetching" | "disconnecting">("idle");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -54,6 +67,23 @@ export function AzureDevOpsPanel(): JSX.Element {
           workItemsBatchUrl: savedConnection.workItemsBatchUrl,
           username: savedConnection.username,
         }));
+        void window.questboard.db.azureDevOps.getSprintBoards().then((savedBoards) => {
+          if (!active) return;
+          setBoards(savedBoards);
+          setSprints(
+            savedBoards.map((board) => ({
+              id: board.remoteId,
+              name: board.name,
+              path: board.path,
+              startDate: board.startDate,
+              finishDate: board.finishDate,
+              timeFrame: board.timeFrame,
+            }))
+          );
+          if (savedBoards.length) setSelectedSprintId(savedBoards[0].remoteId);
+        }).catch((boardsError: unknown) => {
+          if (active) setError(errorMessage(boardsError));
+        });
       })
       .catch((loadError: unknown) => {
         if (active) setError(errorMessage(loadError));
@@ -84,14 +114,26 @@ export function AzureDevOpsPanel(): JSX.Element {
         testConnection: "Bağlantıyı Dene",
         testing: "Bağlantı deneniyor...",
         fetching: "Görevler alınıyor...",
-        connectionSucceeded: "Bağlantı başarılı. Görevler alınıyor...",
         synchronize: "Senkronize Et",
         disconnect: "Kimlik bilgilerini sil",
         disconnecting: "Siliniyor...",
         saved: "Kimlik bilgileri güvenli olarak kayıtlı.",
-        currentSprint: "Güncel sprint",
+        currentSprint: "Seçilen sprint",
+        selectSprint: "Sprint Board",
+        chooseSprint: "Bir sprint seçin",
+        sprintBoardReady: "Sprint Board hazırlandı ve görevler eşitlendi.",
+        noSprints: "Azure DevOps'ta kullanılabilir sprint bulunamadı.",
         tasks: "Size atanmış görevler",
         noTasks: "Bu sprintte size atanmış görev bulunamadı.",
+        selectTasks: "Aktarılacak görevleri seçin",
+        selectAll: "Tümünü seç",
+        deselectAll: "Seçimi kaldır",
+        importSelected: "Seçilenleri aktar",
+        importAll: "Tümünü aktar",
+        importing: "Aktarılıyor...",
+        imported: "Sprint Board'a aktarıldı",
+        alreadyImported: "Board'da mevcut",
+        connect: "Azure'a bağlan",
         updated: "Son güncelleme",
         estimate: "Tamamlanan / tahmin",
         remaining: "Kalan",
@@ -117,14 +159,26 @@ export function AzureDevOpsPanel(): JSX.Element {
         testConnection: "Test connection",
         testing: "Testing connection...",
         fetching: "Fetching tasks...",
-        connectionSucceeded: "Connection successful. Fetching tasks...",
         synchronize: "Synchronize",
         disconnect: "Forget credentials",
         disconnecting: "Removing...",
         saved: "Credentials are securely saved.",
-        currentSprint: "Current sprint",
+        currentSprint: "Selected sprint",
+        selectSprint: "Sprint Board",
+        chooseSprint: "Select a sprint",
+        sprintBoardReady: "Sprint Board is ready and its tasks are synchronized.",
+        noSprints: "No sprints are available in Azure DevOps.",
         tasks: "Tasks assigned to you",
         noTasks: "No tasks assigned to you in this sprint.",
+        selectTasks: "Choose tasks to transfer",
+        selectAll: "Select all",
+        deselectAll: "Deselect all",
+        importSelected: "Transfer selected",
+        importAll: "Transfer all",
+        importing: "Transferring...",
+        imported: "Transferred to Sprint Board",
+        alreadyImported: "Already on board",
+        connect: "Connect Azure",
         updated: "Last updated",
         estimate: "Completed / estimate",
         remaining: "Remaining",
@@ -141,6 +195,29 @@ export function AzureDevOpsPanel(): JSX.Element {
     setForm((current) => ({ ...current, [field]: value }));
   };
 
+  const synchronizeSprint = async (
+    sprintId: string,
+    input: AzureDevOpsConnectRequestDto
+  ) => {
+    setPhase("fetching");
+    setError("");
+    setNotice("");
+    setResult(null);
+    try {
+      const data = await window.questboard.db.azureDevOps.previewSprint(input, sprintId);
+      setConnection(data.connection);
+      setResult(data);
+      setSelectedSprintId(data.sprint.id);
+      setSelectedTaskIds([]);
+      setForm((current) => ({ ...current, password: "" }));
+      setNotice("");
+    } catch (syncError) {
+      setError(errorMessage(syncError));
+    } finally {
+      setPhase("idle");
+    }
+  };
+
   const testConnection = async () => {
     setPhase("testing");
     setError("");
@@ -149,6 +226,10 @@ export function AzureDevOpsPanel(): JSX.Element {
     try {
       const tested = await window.questboard.db.azureDevOps.testConnection(form);
       setConnection(tested.connection);
+      setSprints(tested.sprints);
+      setSprintListLoaded(true);
+      const sprintId = tested.activeSprintId ?? "";
+      setSelectedSprintId(sprintId);
       const savedProfile = {
         sprintUrl: tested.connection.sprintUrl,
         wiqlUrl: tested.connection.wiqlUrl,
@@ -157,34 +238,43 @@ export function AzureDevOpsPanel(): JSX.Element {
         password: "",
       };
       setForm((current) => ({ ...current, ...savedProfile }));
-      setPhase("fetching");
-      setNotice(text.connectionSucceeded);
-      const data = await window.questboard.db.azureDevOps.synchronize(savedProfile);
-      setConnection(data.connection);
-      setResult(data);
-      setNotice("");
-      setForm((current) => ({ ...current, password: "" }));
+      if (sprintId) {
+        await synchronizeSprint(sprintId, savedProfile);
+      } else {
+        setNotice(tested.sprints.length ? text.chooseSprint : text.noSprints);
+      }
     } catch (connectError) {
       setError(errorMessage(connectError));
     } finally {
+      setForm((current) => ({ ...current, password: "" }));
       setPhase("idle");
     }
   };
 
   const synchronize = async () => {
-    setPhase("fetching");
+    if (selectedSprintId) await synchronizeSprint(selectedSprintId, form);
+  };
+
+  const transferTasks = async (taskIds: number[]) => {
+    if (!result || taskIds.length === 0) return;
+    setImporting(true);
     setError("");
     setNotice("");
-    setResult(null);
     try {
-      const data = await window.questboard.db.azureDevOps.synchronize(form);
-      setConnection(data.connection);
-      setResult(data);
-      setForm((current) => ({ ...current, password: "" }));
-    } catch (syncError) {
-      setError(errorMessage(syncError));
+      const imported: AzureDevOpsImportResultDto = await window.questboard.db.azureDevOps.importTasks(
+        result.previewId,
+        taskIds
+      );
+      setBoards(imported.boards);
+      setNotice(`${imported.importedCount} ${text.imported}.`);
+      window.dispatchEvent(
+        new CustomEvent("azure-sprint-board-selected", { detail: imported.board.id })
+      );
+      onImported?.();
+    } catch (importError) {
+      setError(errorMessage(importError));
     } finally {
-      setPhase("idle");
+      setImporting(false);
     }
   };
 
@@ -196,6 +286,11 @@ export function AzureDevOpsPanel(): JSX.Element {
       await window.questboard.db.azureDevOps.disconnect();
       setConnection({ ...EMPTY_CONNECTION });
       setResult(null);
+      setSprints([]);
+      setSprintListLoaded(false);
+      setBoards([]);
+      setSelectedSprintId("");
+      setSelectedTaskIds([]);
       setForm((current) => ({ ...current, password: "" }));
     } catch (disconnectError) {
       setError(errorMessage(disconnectError));
@@ -308,7 +403,7 @@ export function AzureDevOpsPanel(): JSX.Element {
           <button
             type="button"
             onClick={() => void synchronize()}
-            disabled={loading || !canUseSavedCredentials}
+            disabled={loading || !canUseSavedCredentials || !selectedSprintId}
             className="rounded-lg border border-sky-300/25 bg-sky-400/10 px-4 py-2 text-sm font-semibold text-sky-100 hover:bg-sky-400/20 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {phase === "fetching" ? text.fetching : text.synchronize}
@@ -326,6 +421,40 @@ export function AzureDevOpsPanel(): JSX.Element {
         )}
         <span className="text-[11px] text-white/45">{text.secureHint}</span>
       </div>
+
+      {(sprints.length > 0 || boards.length > 0) && (
+        <label className="mt-4 block max-w-xl text-xs font-medium text-white/65">
+          {text.selectSprint}
+          <select
+            value={selectedSprintId}
+            onChange={(event) => {
+              const sprintId = event.target.value;
+              setSelectedSprintId(sprintId);
+              if (sprintId && canUseSavedCredentials) {
+                void synchronizeSprint(sprintId, form);
+              }
+            }}
+            disabled={loading}
+            className={`${inputClassName} mt-1`}
+          >
+            <option value="">{text.chooseSprint}</option>
+            {sprints.map((sprint) => (
+              <option key={sprint.id} value={sprint.id}>
+                {sprint.name}
+                {sprint.startDate || sprint.finishDate
+                  ? ` · ${formatDate(sprint.startDate, isTurkish ? "tr-TR" : "en-US")} – ${formatDate(sprint.finishDate, isTurkish ? "tr-TR" : "en-US")}`
+                  : ""}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+
+      {connection.hasSavedCredentials && sprintListLoaded && sprints.length === 0 && (
+        <p className="mt-3 rounded-lg border border-hud-border bg-white/[0.03] p-3 text-sm text-white/45">
+          {text.noSprints}
+        </p>
+      )}
 
       {notice && (
         <p role="status" className="mt-3 text-xs text-emerald-200/80">
@@ -364,11 +493,30 @@ export function AzureDevOpsPanel(): JSX.Element {
             <h3 className="text-xs font-semibold uppercase tracking-wide text-white/65">
               {text.tasks}
             </h3>
-            <span className="text-[11px] text-white/40">
-              {text.updated}: {new Date(result.fetchedAt).toLocaleTimeString(isTurkish ? "tr-TR" : "en-US")}
-            </span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() =>
+                  setSelectedTaskIds(
+                    selectedTaskIds.length === result.tasks.length
+                      ? []
+                      : result.tasks.map((task) => task.id)
+                  )
+                }
+                disabled={importing || result.tasks.length === 0}
+                className="rounded-md px-2 py-1 text-[11px] text-sky-200 hover:bg-white/10 disabled:opacity-40"
+              >
+                {selectedTaskIds.length === result.tasks.length
+                  ? text.deselectAll
+                  : text.selectAll}
+              </button>
+              <span className="text-[11px] text-white/40">
+                {text.updated}: {new Date(result.fetchedAt).toLocaleTimeString(isTurkish ? "tr-TR" : "en-US")}
+              </span>
+            </div>
           </div>
 
+          <p className="mt-1 text-[11px] text-white/45">{text.selectTasks}</p>
           {result.tasks.length === 0 ? (
             <p className="mt-2 rounded-lg border border-hud-border bg-white/[0.03] p-3 text-sm text-white/45">
               {text.noTasks}
@@ -381,7 +529,22 @@ export function AzureDevOpsPanel(): JSX.Element {
                   className="rounded-lg border border-hud-border bg-white/[0.035] p-3"
                 >
                   <div className="flex flex-wrap items-start justify-between gap-2">
-                    <div className="min-w-0">
+                    <label className="flex min-w-0 flex-1 items-start gap-2">
+                      <input
+                        type="checkbox"
+                        checked={selectedTaskIds.includes(task.id)}
+                        onChange={(event) =>
+                          setSelectedTaskIds((current) =>
+                            event.target.checked
+                              ? [...current, task.id]
+                              : current.filter((id) => id !== task.id)
+                          )
+                        }
+                        disabled={importing}
+                        className="mt-1 accent-sky-400"
+                        aria-label={task.title}
+                      />
+                      <span className="min-w-0">
                       <p className="text-[11px] text-white/40">#{task.id}</p>
                       <h4 className="mt-0.5 break-words text-sm font-medium text-white/90">
                         {task.title}
@@ -389,7 +552,8 @@ export function AzureDevOpsPanel(): JSX.Element {
                       {task.assignedTo && (
                         <p className="mt-1 text-xs text-white/45">{task.assignedTo}</p>
                       )}
-                    </div>
+                      </span>
+                    </label>
                     <span className="shrink-0 rounded-full border border-sky-300/20 bg-sky-400/10 px-2 py-0.5 text-[11px] text-sky-100">
                       {task.state}
                     </span>
@@ -412,6 +576,29 @@ export function AzureDevOpsPanel(): JSX.Element {
                   )}
                 </article>
               ))}
+            </div>
+          )}
+
+          {result.tasks.length > 0 && (
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => void transferTasks(selectedTaskIds)}
+                disabled={importing || selectedTaskIds.length === 0}
+                className="rounded-lg bg-sky-400/90 px-3 py-2 text-xs font-semibold text-black hover:bg-sky-300 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {importing
+                  ? text.importing
+                  : `${text.importSelected} (${selectedTaskIds.length})`}
+              </button>
+              <button
+                type="button"
+                onClick={() => void transferTasks(result.tasks.map((task) => task.id))}
+                disabled={importing}
+                className="rounded-lg border border-sky-300/25 bg-sky-400/10 px-3 py-2 text-xs font-semibold text-sky-100 hover:bg-sky-400/20 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {importing ? text.importing : text.importAll}
+              </button>
             </div>
           )}
         </div>

@@ -1,6 +1,6 @@
 {
   "name": "questboard",
-  "version": "0.1.3-azure.1",
+  "version": "0.1.3-azure.2",
   "description": "QuestBoard - a gamified quest/task overlay HUD app",
   "main": "dist-electron/main.js",
   "author": "",
@@ -12,6 +12,7 @@
     "preview": "vite preview",
     "electron:dev": "npm run build:electron && concurrently -k \"vite\" \"tsc -p electron/tsconfig.json --watch\" \"wait-on http://localhost:5173 dist-electron/main.js && cross-env VITE_DEV_SERVER_URL=http://localhost:5173 electron .\"",
     "build:electron": "tsc -p electron/tsconfig.json && node scripts/copy-electron-assets.mjs",
+    "test:azure-sprints": "npm run build:electron && cross-env ELECTRON_RUN_AS_NODE=1 electron --test scripts/azure-sprint-boards.test.cjs",
     "start": "electron .",
     "postinstall": "electron-rebuild -f -w better-sqlite3"
   },

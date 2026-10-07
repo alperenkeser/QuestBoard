@@ -1,8 +1,12 @@
 import { app, safeStorage } from "electron";
+import { createHash, randomUUID } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
+import { AzureSprintBoardRepository } from "./repositories/AzureSprintBoardRepository";
+import { SettingsRepository } from "./repositories/SettingsRepository";
+import { generateId } from "./utils/id";
 
-interface StoredConnection {
+export interface StoredConnection {
   sprintUrl: string;
   wiqlUrl: string;
   workItemsBatchUrl: string;
@@ -10,7 +14,7 @@ interface StoredConnection {
   password: string;
 }
 
-interface AzureDevOpsConnectionDto {
+export interface AzureDevOpsConnectionDto {
   sprintUrl: string;
   wiqlUrl: string;
   workItemsBatchUrl: string;
@@ -18,15 +22,16 @@ interface AzureDevOpsConnectionDto {
   hasSavedCredentials: boolean;
 }
 
-interface AzureDevOpsSprintDto {
+export interface AzureDevOpsSprintDto {
   id: string;
   name: string;
   path: string;
   startDate: string | null;
   finishDate: string | null;
+  timeFrame: "past" | "current" | "future" | "unknown";
 }
 
-interface AzureDevOpsTaskDto {
+export interface AzureDevOpsTaskDto {
   id: number;
   title: string;
   state: string;
@@ -39,20 +44,57 @@ interface AzureDevOpsTaskDto {
   url: string;
 }
 
-interface AzureDevOpsTestResultDto {
+export interface AzureDevOpsTestResultDto {
   connection: AzureDevOpsConnectionDto;
-  sprint: AzureDevOpsSprintDto;
+  sprints: AzureDevOpsSprintDto[];
+  activeSprintId: string | null;
 }
 
-interface AzureDevOpsSyncResultDto {
+export interface AzureDevOpsSyncResultDto {
   connection: AzureDevOpsConnectionDto;
+  previewId: string;
+  sprints: AzureDevOpsSprintDto[];
+  activeSprintId: string | null;
   sprint: AzureDevOpsSprintDto;
   tasks: AzureDevOpsTaskDto[];
   fetchedAt: string;
 }
 
+export interface AzureDevOpsImportResultDto {
+  board: {
+    id: string;
+    remoteId: string;
+    name: string;
+    path: string;
+    startDate: string | null;
+    finishDate: string | null;
+    timeFrame: "past" | "current" | "future" | "unknown";
+    lastSyncedDate: string | null;
+  };
+  importedCount: number;
+  boards: ReturnType<typeof getAzureSprintBoards>;
+}
+
 const API_VERSION = "6.0";
 const MAX_BATCH_SIZE = 200;
+const PREVIEW_TTL_MS = 10 * 60 * 1000;
+const previews = new Map<
+  string,
+  { sourceKey: string; sprint: AzureDevOpsSprintDto; tasks: AzureDevOpsTaskDto[]; expiresAt: number }
+>();
+
+function sourceKeyFor(connection: StoredConnection): string {
+  return createHash("sha256")
+    .update(
+      [
+        connection.sprintUrl,
+        connection.wiqlUrl,
+        connection.workItemsBatchUrl,
+        connection.username,
+      ].join("|")
+    )
+    .digest("hex");
+}
 
 function credentialsPath(): string {
   return path.join(app.getPath("userData"), "azure-devops-credentials.bin");
@@ -207,6 +249,12 @@ function readRequest(input: unknown): Omit<StoredConnection, "password"> & { pas
     typeof input.workItemsBatchUrl === "string"
       ? normalizeApiUrl(input.workItemsBatchUrl, "the work items batch URL")
       : "";
+  const origins = new Set(
+    [sprintUrl, wiqlUrl, workItemsBatchUrl].map((value) => new URL(value).origin)
+  );
+  if (origins.size !== 1) {
+    throw new Error("All Azure DevOps API URLs must use the same HTTPS host.");
+  }
   const username = typeof input.username === "string" ? input.username.trim() : "";
   const password = typeof input.password === "string" ? input.password : "";
 
@@ -265,35 +313,35 @@ async function requestJson(
   }
 }
 
-function readSprint(value: unknown): AzureDevOpsSprintDto {
+export function readSprints(value: unknown): AzureDevOpsSprintDto[] {
   if (!isRecord(value) || !Array.isArray(value.value)) {
     throw new Error("Azure DevOps did not return sprint data.");
   }
-  const current = value.value.find(
-    (iteration) =>
-      isRecord(iteration) &&
-      isRecord(iteration.attributes) &&
-      String(iteration.attributes.timeFrame).toLowerCase() === "current"
-  );
-  if (!isRecord(current)) {
-    throw new Error("No current sprint was found for this project/team.");
-  }
+  return value.value.flatMap((iteration): AzureDevOpsSprintDto[] => {
+    if (!isRecord(iteration)) return [];
+    const attributes = isRecord(iteration.attributes) ? iteration.attributes : {};
+    const name = typeof iteration.name === "string" ? iteration.name : "";
+    const sprintPath = typeof iteration.path === "string" ? iteration.path : name;
+    const id =
+      typeof iteration.id === "string" || typeof iteration.id === "number"
+        ? String(iteration.id)
+        : sprintPath;
+    if (!id || !sprintPath) return [];
+    const rawTimeFrame = String(attributes.timeFrame ?? "unknown").toLowerCase();
+    const timeFrame = ["past", "current", "future"].includes(rawTimeFrame)
+      ? (rawTimeFrame as AzureDevOpsSprintDto["timeFrame"])
+      : "unknown";
+    const pathSegments = sprintPath.split("\\");
 
-  const attributes = isRecord(current.attributes) ? current.attributes : {};
-  const name = typeof current.name === "string" ? current.name : "";
-  const sprintPath = typeof current.path === "string" ? current.path : name;
-  if (!sprintPath) throw new Error("Azure DevOps returned a current sprint without a path.");
-  const pathSegments = sprintPath.split("\\");
-
-  return {
-    id: typeof current.id === "string" || typeof current.id === "number"
-      ? String(current.id)
-      : sprintPath,
-    name: name || pathSegments[pathSegments.length - 1] || sprintPath,
-    path: sprintPath,
-    startDate: typeof attributes.startDate === "string" ? attributes.startDate : null,
-    finishDate: typeof attributes.finishDate === "string" ? attributes.finishDate : null,
-  };
+    return [{
+      id,
+      name: name || pathSegments[pathSegments.length - 1] || sprintPath,
+      path: sprintPath,
+      startDate: typeof attributes.startDate === "string" ? attributes.startDate : null,
+      finishDate: typeof attributes.finishDate === "string" ? attributes.finishDate : null,
+      timeFrame,
+    }];
+  });
 }
 
 function readWorkItemIds(value: unknown): number[] {
@@ -410,41 +458,125 @@ function authorizationFor(connection: StoredConnection): string {
   return `Basic ${Buffer.from(`${connection.username}:${connection.password}`, "utf8").toString("base64")}`;
 }
 
-async function fetchCurrentSprint(
+async function fetchSprints(
   connection: StoredConnection,
   authorization: string
-): Promise<AzureDevOpsSprintDto> {
+): Promise<AzureDevOpsSprintDto[]> {
   const sprintUrl = apiUrl(connection.sprintUrl);
-  sprintUrl.searchParams.set("$timeframe", "current");
-  return readSprint(await requestJson(sprintUrl, authorization));
+  sprintUrl.searchParams.delete("$timeframe");
+  return readSprints(await requestJson(sprintUrl, authorization));
 }
 
 export async function testAzureDevOpsConnection(
   input: unknown
 ): Promise<AzureDevOpsTestResultDto> {
   const connection = resolveConnection(input);
-  const sprint = await fetchCurrentSprint(connection, authorizationFor(connection));
+  const sprints = await fetchSprints(connection, authorizationFor(connection));
   saveConnection(connection);
   return {
     connection: toConnectionDto(connection),
-    sprint,
+    sprints,
+    activeSprintId: sprints.find((sprint) => sprint.timeFrame === "current")?.id ?? null,
   };
 }
 
-export async function synchronizeAzureDevOps(
-  input: unknown
+export async function previewAzureDevOpsSprint(
+  input: unknown,
+  selectedSprintId: unknown
 ): Promise<AzureDevOpsSyncResultDto> {
   const connection = resolveConnection(input);
   const authorization = authorizationFor(connection);
-  const sprint = await fetchCurrentSprint(connection, authorization);
+  if (typeof selectedSprintId !== "string" || !selectedSprintId.trim()) {
+    throw new Error("Select a sprint before synchronizing.");
+  }
+  const sprints = await fetchSprints(connection, authorization);
+  const sprint = sprints.find((candidate) => candidate.id === selectedSprintId);
+  if (!sprint) throw new Error("The selected sprint is no longer available in Azure DevOps.");
   const tasks = await fetchTasks(connection, sprint.path, authorization);
   saveConnection(connection);
-  return {
-    connection: toConnectionDto(connection),
+  const now = Date.now();
+  for (const [id, preview] of previews) {
+    if (preview.expiresAt <= now) previews.delete(id);
+  }
+  const previewId = randomUUID();
+  previews.set(previewId, {
+    sourceKey: sourceKeyFor(connection),
     sprint,
     tasks,
-    fetchedAt: new Date().toISOString(),
+    expiresAt: now + PREVIEW_TTL_MS,
+  });
+  return {
+    connection: toConnectionDto(connection),
+    previewId,
+    sprints,
+    activeSprintId: sprints.find((candidate) => candidate.timeFrame === "current")?.id ?? null,
+    sprint,
+    tasks,
+    fetchedAt: new Date(now).toISOString(),
   };
+}
+
+export function importAzureDevOpsTasks(previewId: unknown, selectedTaskIds: unknown): AzureDevOpsImportResultDto {
+  if (typeof previewId !== "string" || !Array.isArray(selectedTaskIds)) {
+    throw new Error("Invalid Azure DevOps import selection.");
+  }
+  const preview = previews.get(previewId);
+  if (!preview || preview.expiresAt <= Date.now()) {
+    previews.delete(previewId);
+    throw new Error("This Azure task preview has expired. Refresh the sprint before importing.");
+  }
+  if (
+    selectedTaskIds.length === 0 ||
+    selectedTaskIds.length > preview.tasks.length ||
+    selectedTaskIds.some((id) => typeof id !== "number" || !Number.isSafeInteger(id))
+  ) {
+    throw new Error("Select at least one valid Azure task to import.");
+  }
+  const selectedIds = new Set(selectedTaskIds as number[]);
+  if (selectedIds.size !== selectedTaskIds.length) {
+    throw new Error("The Azure task selection contains duplicates.");
+  }
+  const tasks = preview.tasks.filter((task) => selectedIds.has(task.id));
+  if (tasks.length !== selectedIds.size) {
+    throw new Error("The Azure task selection does not match the fetched sprint.");
+  }
+
+  const fetchedAt = new Date().toISOString();
+  const board = AzureSprintBoardRepository.synchronize({
+    sourceKey: preview.sourceKey,
+    sprint: preview.sprint,
+    tasks,
+    columns: SettingsRepository.getBoardColumns(),
+    syncedAt: fetchedAt,
+    createId: () => generateId("azure-sprint"),
+  });
+  return {
+    board: {
+      id: board.id,
+      remoteId: board.remoteId,
+      name: board.name,
+      path: board.path,
+      startDate: board.startDate,
+      finishDate: board.finishDate,
+      timeFrame: board.timeFrame as AzureDevOpsSprintDto["timeFrame"],
+      lastSyncedDate: board.lastSyncedDate,
+    },
+    importedCount: tasks.length,
+    boards: getAzureSprintBoards(),
+  };
+}
+
+export function getAzureSprintBoards() {
+  return AzureSprintBoardRepository.getAll().map((board) => ({
+    id: board.id,
+    remoteId: board.remoteId,
+    name: board.name,
+    path: board.path,
+    startDate: board.startDate,
+    finishDate: board.finishDate,
+    timeFrame: board.timeFrame as AzureDevOpsSprintDto["timeFrame"],
+    lastSyncedDate: board.lastSyncedDate,
+  }));
 }
 
 export function disconnectAzureDevOps(): void {

@@ -32,6 +32,8 @@ export interface Quest {
   showInOverlay: boolean;
   boardColumnId: string;
   boardOrder: number;
+  azureSprintBoardId: string | null;
+  azureWorkItemId: string | null;
 }
 
 export interface QuestFormInput {

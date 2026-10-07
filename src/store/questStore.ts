@@ -163,6 +163,8 @@ export const useQuestStore = create<QuestState>((set, get) => ({
         showInOverlay: false,
         boardColumnId,
         boardOrder: state.quests.filter((quest) => quest.boardColumnId === boardColumnId).length,
+        azureSprintBoardId: null,
+        azureWorkItemId: null,
       };
       const newSubtasks: Subtask[] = input.subtaskTitles.map((title, index) => ({
         id: `pending-subtask-${index}-${Date.now()}`,
