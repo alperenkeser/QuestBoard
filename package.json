@@ -1,6 +1,6 @@
 {
   "name": "questboard",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "QuestBoard - a gamified quest/task overlay HUD app",
   "main": "dist-electron/main.js",
   "author": "",

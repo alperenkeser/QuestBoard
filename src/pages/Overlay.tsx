@@ -14,41 +14,12 @@ import { OverlayCelebration } from "../components/OverlayCelebration";
  * draggable window content. Shows at most `maxVisibleQuests` active quests,
  * highest priority first.
  */
-const OVERLAY_WIDTH = 340;
-const OVERLAY_HEIGHT = 760;
-const OVERLAY_MARGIN = 16;
 const SNAP_THRESHOLD = 72;
 
-const SNAP_ANCHORS: OverlayAnchor[] = [
-  "right-top",
-  "right-middle",
-  "right-bottom",
-  "left-top",
-  "left-middle",
-  "left-bottom",
-];
-
-function getSnapPoints(): Record<OverlayAnchor, { x: number; y: number }> {
-  const sw = window.screen.availWidth;
-  const sh = window.screen.availHeight;
-  const width = Math.min(window.outerWidth || OVERLAY_WIDTH, sw - OVERLAY_MARGIN * 2);
-  const height = Math.min(window.outerHeight || OVERLAY_HEIGHT, sh - OVERLAY_MARGIN * 2);
-  const rightX = sw - width - OVERLAY_MARGIN;
-  const leftX = OVERLAY_MARGIN;
-  const topY = OVERLAY_MARGIN + 48;
-  const middleY = Math.round((sh - height) / 2);
-  const bottomY = sh - height - OVERLAY_MARGIN;
-
-  return {
-    "right-top": { x: rightX, y: topY },
-    "right-middle": { x: rightX, y: middleY },
-    "right-bottom": { x: rightX, y: bottomY },
-    "left-top": { x: leftX, y: topY },
-    "left-middle": { x: leftX, y: middleY },
-    "left-bottom": { x: leftX, y: bottomY },
-    custom: { x: window.screenX, y: window.screenY },
-  };
-}
+type OverlaySnapPoints = Record<
+  Exclude<OverlayAnchor, "custom">,
+  { x: number; y: number }
+>;
 
 export function Overlay(): JSX.Element {
   const activeQuestsSortedByPriority = useQuestStore((s) => s.activeQuestsSortedByPriority);
@@ -69,6 +40,7 @@ export function Overlay(): JSX.Element {
   const [collapsedCards, setCollapsedCards] = useState<Record<string, boolean>>({});
   const [snapPreview, setSnapPreview] = useState<OverlayAnchor | null>(null);
   const [isInteractiveHover, setIsInteractiveHover] = useState(false);
+  const snapPointsRef = useRef<OverlaySnapPoints | null>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{
     startMouseX: number;
@@ -80,6 +52,15 @@ export function Overlay(): JSX.Element {
 
   const activeQuests = activeQuestsSortedByPriority();
   const quests = overlayQuests().slice(0, maxVisibleQuests);
+
+  useEffect(() => {
+    window.questboard.window
+      .getOverlaySnapPoints()
+      .then((points) => {
+        snapPointsRef.current = points;
+      })
+      .catch(console.error);
+  }, []);
 
   useEffect(() => {
     const content = contentRef.current;
@@ -154,6 +135,12 @@ export function Overlay(): JSX.Element {
       startWindowY: window.screenY,
       active: true,
     };
+    window.questboard.window
+      .getOverlaySnapPoints()
+      .then((points) => {
+        snapPointsRef.current = points;
+      })
+      .catch(console.error);
     event.preventDefault();
     setSnapPreview(settings?.overlayAnchor ?? "right-top");
   };
@@ -172,10 +159,11 @@ export function Overlay(): JSX.Element {
         return;
       }
 
-      const points = getSnapPoints();
+      const points = snapPointsRef.current;
+      if (!points) return;
       let nearest: OverlayAnchor = "right-top";
       let nearestDist = Number.POSITIVE_INFINITY;
-      for (const anchor of SNAP_ANCHORS) {
+      for (const anchor of Object.keys(points) as Array<Exclude<OverlayAnchor, "custom">>) {
         const px = points[anchor].x;
         const py = points[anchor].y;
         const dist = Math.hypot(px - x, py - y);
@@ -199,15 +187,22 @@ export function Overlay(): JSX.Element {
         return;
       }
       const selected = snapPreview;
-      if (selected) {
-        const points = getSnapPoints();
-        const target = points[selected];
-        window.questboard.window.setOverlayPosition(target.x, target.y).catch(console.error);
-        updateSettings({
-          overlayAnchor: selected,
-          overlayX: null,
-          overlayY: null,
-        });
+      if (selected && selected !== "custom") {
+        const target = snapPointsRef.current?.[selected];
+        if (target) {
+          window.questboard.window.setOverlayPosition(target.x, target.y).catch(console.error);
+          updateSettings({
+            overlayAnchor: selected,
+            overlayX: null,
+            overlayY: null,
+          });
+        } else {
+          updateSettings({
+            overlayAnchor: "custom",
+            overlayX: window.screenX,
+            overlayY: window.screenY,
+          });
+        }
       } else {
         updateSettings({
           overlayAnchor: "custom",

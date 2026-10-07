@@ -77,8 +77,16 @@ function focusOverlayWindow(): void {
 }
 
 function moveOverlayWindow(x: number, y: number): void {
-  if (!overlayWindow) return;
-  overlayWindow.setPosition(Math.round(x), Math.round(y));
+  if (!overlayWindow || !Number.isFinite(x) || !Number.isFinite(y)) return;
+  const bounds = overlayWindow.getBounds();
+  const display = screen.getDisplayNearestPoint({
+    x: Math.round(x + bounds.width / 2),
+    y: Math.round(y + bounds.height / 2),
+  });
+  const { workArea } = display;
+  const nextX = Math.min(Math.max(Math.round(x), workArea.x), workArea.x + workArea.width - bounds.width);
+  const nextY = Math.min(Math.max(Math.round(y), workArea.y), workArea.y + workArea.height - bounds.height);
+  overlayWindow.setPosition(nextX, nextY);
 }
 
 function resolveOverlayPosition(
@@ -86,12 +94,23 @@ function resolveOverlayPosition(
   requestedHeight = overlayWindow?.getBounds().height ?? OVERLAY_HEIGHT,
   requestedWidth = overlayWindow?.getBounds().width ?? OVERLAY_WIDTH
 ): { x: number; y: number; width: number; height: number } {
-  const { workArea } = screen.getPrimaryDisplay();
+  const currentBounds = overlayWindow?.getBounds();
+  const display = currentBounds
+    ? screen.getDisplayMatching(currentBounds)
+    : settings.overlayAnchor === "custom" && settings.overlayX !== null && settings.overlayY !== null
+      ? screen.getDisplayNearestPoint({ x: settings.overlayX, y: settings.overlayY })
+      : screen.getPrimaryDisplay();
+  const { workArea } = display;
   const width = Math.min(requestedWidth, workArea.width - OVERLAY_MARGIN * 2);
   const height = Math.min(requestedHeight, workArea.height - OVERLAY_MARGIN * 2);
 
   if (settings.overlayAnchor === "custom" && settings.overlayX !== null && settings.overlayY !== null) {
-    return { x: settings.overlayX, y: settings.overlayY, width, height };
+    return {
+      x: Math.min(Math.max(settings.overlayX, workArea.x), workArea.x + workArea.width - width),
+      y: Math.min(Math.max(settings.overlayY, workArea.y), workArea.y + workArea.height - height),
+      width,
+      height,
+    };
   }
 
   const isLeft = settings.overlayAnchor.startsWith("left");
@@ -111,14 +130,45 @@ function resolveOverlayPosition(
   return { x, y: yByAnchor[settings.overlayAnchor] ?? workArea.y + OVERLAY_MARGIN, width, height };
 }
 
+function getOverlaySnapPoints(): Record<
+  "right-top" | "right-middle" | "right-bottom" | "left-top" | "left-middle" | "left-bottom",
+  { x: number; y: number }
+> {
+  const bounds = overlayWindow?.getBounds();
+  const display = bounds ? screen.getDisplayMatching(bounds) : screen.getPrimaryDisplay();
+  const { workArea } = display;
+  const width = Math.min(bounds?.width ?? OVERLAY_WIDTH, workArea.width - OVERLAY_MARGIN * 2);
+  const height = Math.min(bounds?.height ?? OVERLAY_HEIGHT, workArea.height - OVERLAY_MARGIN * 2);
+  const leftX = workArea.x + OVERLAY_MARGIN;
+  const rightX = workArea.x + workArea.width - width - OVERLAY_MARGIN;
+  const topY = workArea.y + OVERLAY_MARGIN;
+  const middleY = workArea.y + Math.round((workArea.height - height) / 2);
+  const bottomY = workArea.y + workArea.height - height - OVERLAY_MARGIN;
+
+  return {
+    "right-top": { x: rightX, y: topY },
+    "right-middle": { x: rightX, y: middleY },
+    "right-bottom": { x: rightX, y: bottomY },
+    "left-top": { x: leftX, y: topY },
+    "left-middle": { x: leftX, y: middleY },
+    "left-bottom": { x: leftX, y: bottomY },
+  };
+}
+
 function setOverlayBounds(bounds: Electron.Rectangle): void {
   if (!overlayWindow) return;
-  overlayWindow.setBounds(bounds);
+  const currentBounds = overlayWindow.getBounds();
+  if (currentBounds.width !== bounds.width || currentBounds.height !== bounds.height) {
+    overlayWindow.setSize(bounds.width, bounds.height);
+  }
+  if (currentBounds.x !== bounds.x || currentBounds.y !== bounds.y) {
+    overlayWindow.setPosition(bounds.x, bounds.y);
+  }
 }
 
 function resizeOverlayToContent(requestedHeight: number): void {
   if (!overlayWindow || !Number.isFinite(requestedHeight)) return;
-  const { workArea } = screen.getPrimaryDisplay();
+  const { workArea } = screen.getDisplayMatching(overlayWindow.getBounds());
   const maxHeight = Math.max(220, workArea.height - OVERLAY_MARGIN * 2);
   const height = Math.min(Math.max(220, Math.ceil(requestedHeight)), maxHeight);
   overlayContentHeight = height;
@@ -225,11 +275,16 @@ app.whenReady().then(() => {
       assertTrustedIpcSender(event);
       resizeOverlayToContent(height);
     });
+    ipcMain.handle("window:getOverlaySnapPoints", (event) => {
+      assertTrustedIpcSender(event);
+      return getOverlaySnapPoints();
+    });
     registerIpcHandlers({
       onSettingsUpdated: applyRuntimeSettings,
       focusMainWindow,
       focusOverlayWindow,
       moveOverlayWindow,
+      getOverlaySnapPoints,
     });
     applyRuntimeSettings(settings);
     createMainWindow();

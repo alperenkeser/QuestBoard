@@ -112,11 +112,26 @@ export interface QuestBoardBridge {
     focusMain: () => Promise<void>;
     focusOverlay: () => Promise<void>;
     setOverlayPosition: (x: number, y: number) => Promise<void>;
+    getOverlaySnapPoints: () => Promise<
+      Record<
+        Exclude<OverlayAnchor, "custom">,
+        { x: number; y: number }
+      >
+    >;
     setOverlayContentHeight: (height: number) => Promise<void>;
   };
   onDbChanged: (callback: () => void) => () => void;
   onOverlayPinChanged: (callback: (questId: string, pinned: boolean) => void) => () => void;
 }
+
+type OverlayAnchor =
+  | "right-top"
+  | "right-middle"
+  | "right-bottom"
+  | "left-top"
+  | "left-middle"
+  | "left-bottom"
+  | "custom";
 
 declare global {
   interface Window {

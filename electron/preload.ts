@@ -45,6 +45,7 @@ contextBridge.exposeInMainWorld("questboard", {
     focusOverlay: () => ipcRenderer.invoke("window:focusOverlay"),
     setOverlayPosition: (x: number, y: number) =>
       ipcRenderer.invoke("window:setOverlayPosition", x, y),
+    getOverlaySnapPoints: () => ipcRenderer.invoke("window:getOverlaySnapPoints"),
     setOverlayContentHeight: (height: number) =>
       ipcRenderer.invoke("window:setOverlayContentHeight", height),
   },
