@@ -123,6 +123,13 @@ function sanitizeInput(input: UpdateSettingsInput): UpdateSettingsInput {
     ...(input.widgetShowInOverlay !== undefined && {
       widgetShowInOverlay: input.widgetShowInOverlay ? 1 : 0,
     }),
+    ...(input.clickThroughShortcut !== undefined && {
+      clickThroughShortcut:
+        String(input.clickThroughShortcut || "").trim().slice(0, 64) || "CTRL+ALT+P",
+    }),
+    ...(input.overlayIdleDimMinutes !== undefined && {
+      overlayIdleDimMinutes: Math.round(clampNumber(input.overlayIdleDimMinutes, 0, 60)),
+    }),
   };
 }
 
@@ -143,7 +150,8 @@ export const SettingsRepository = {
          overlayAnchor=@overlayAnchor, overlayX=@overlayX, overlayY=@overlayY,
          boardBacklogLabel=@boardBacklogLabel, boardActiveLabel=@boardActiveLabel, boardDoneLabel=@boardDoneLabel,
          boardColumns=@boardColumns, language=@language,
-         showIconsOnHover=@showIconsOnHover, fontSize=@fontSize, widgetShowInOverlay=@widgetShowInOverlay
+         showIconsOnHover=@showIconsOnHover, fontSize=@fontSize, widgetShowInOverlay=@widgetShowInOverlay,
+         clickThroughShortcut=@clickThroughShortcut, overlayIdleDimMinutes=@overlayIdleDimMinutes
          WHERE id = 1`
       )
       .run(next);

@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState, type MouseEvent as ReactMouse
 import { useQuestStore } from "../store/questStore";
 import { useOverlayStore } from "../store/overlayStore";
 import { useSettingsStore } from "../store/settingsStore";
-import type { OverlayAnchor } from "../types";
 import { QuestCard } from "../components/QuestCard";
 import { ComboBadge } from "../components/ComboBadge";
 import { AnimatePresence, motion } from "framer-motion";
@@ -14,13 +13,6 @@ import { OverlayCelebration } from "../components/OverlayCelebration";
  * draggable window content. Shows at most `maxVisibleQuests` active quests,
  * highest priority first.
  */
-const SNAP_THRESHOLD = 72;
-
-type OverlaySnapPoints = Record<
-  Exclude<OverlayAnchor, "custom">,
-  { x: number; y: number }
->;
-
 export function Overlay(): JSX.Element {
   const activeQuestsSortedByPriority = useQuestStore((s) => s.activeQuestsSortedByPriority);
   const overlayQuests = useQuestStore((s) => s.overlayQuests);
@@ -38,9 +30,12 @@ export function Overlay(): JSX.Element {
   const settings = useSettingsStore((s) => s.settings);
   const updateSettings = useSettingsStore((s) => s.updateSettings);
   const [collapsedCards, setCollapsedCards] = useState<Record<string, boolean>>({});
-  const [snapPreview, setSnapPreview] = useState<OverlayAnchor | null>(null);
   const [isInteractiveHover, setIsInteractiveHover] = useState(false);
-  const snapPointsRef = useRef<OverlaySnapPoints | null>(null);
+  const [clickThroughEnabled, setClickThroughEnabled] = useState(false);
+  const [clickThroughControlHovered, setClickThroughControlHovered] = useState(false);
+  const [idleDimmed, setIdleDimmed] = useState(false);
+  const clickThroughControlRef = useRef<HTMLButtonElement>(null);
+  const interactiveAreaRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{
     startMouseX: number;
@@ -54,12 +49,20 @@ export function Overlay(): JSX.Element {
   const quests = overlayQuests().slice(0, maxVisibleQuests);
 
   useEffect(() => {
+    let receivedChange = false;
+    const setClickThrough = (enabled: boolean) => {
+      receivedChange = true;
+      setClickThroughEnabled(enabled);
+      if (!enabled) setClickThroughControlHovered(false);
+    };
+    const unsubscribe = window.questboard.window.onOverlayClickThroughChanged(setClickThrough);
     window.questboard.window
-      .getOverlaySnapPoints()
-      .then((points) => {
-        snapPointsRef.current = points;
+      .getOverlayClickThrough()
+      .then((enabled) => {
+        if (!receivedChange) setClickThrough(enabled);
       })
       .catch(console.error);
+    return unsubscribe;
   }, []);
 
   useEffect(() => {
@@ -82,6 +85,66 @@ export function Overlay(): JSX.Element {
     return () => observer.disconnect();
   }, []);
 
+  useEffect(() => {
+    const idleDimMinutes = settings?.overlayIdleDimMinutes ?? 5;
+    if (idleDimMinutes === 0 || isInteractiveHover) {
+      setIdleDimmed(false);
+      return;
+    }
+    const timeout = window.setTimeout(
+      () => setIdleDimmed(true),
+      idleDimMinutes * 60 * 1000
+    );
+    return () => window.clearTimeout(timeout);
+  }, [settings?.overlayIdleDimMinutes, isInteractiveHover]);
+
+  useEffect(() => {
+    const onMouseMove = (event: MouseEvent) => {
+      const areaBounds = interactiveAreaRef.current?.getBoundingClientRect();
+      const isInteractiveHover = Boolean(
+        areaBounds &&
+          event.clientX >= areaBounds.left &&
+          event.clientX <= areaBounds.right &&
+          event.clientY >= areaBounds.top &&
+          event.clientY <= areaBounds.bottom
+      );
+      setIsInteractiveHover((current) =>
+        current === isInteractiveHover ? current : isInteractiveHover
+      );
+
+      if (!clickThroughEnabled) {
+        setClickThroughControlHovered(false);
+        return;
+      }
+      const controlBounds = clickThroughControlRef.current?.getBoundingClientRect();
+      const isOverClickThroughControl = Boolean(
+        controlBounds &&
+          event.clientX >= controlBounds.left &&
+          event.clientX <= controlBounds.right &&
+          event.clientY >= controlBounds.top &&
+          event.clientY <= controlBounds.bottom
+      );
+      setClickThroughControlHovered((current) =>
+        current === isOverClickThroughControl ? current : isOverClickThroughControl
+      );
+    };
+    const clearHover = () => {
+      setIsInteractiveHover(false);
+      setClickThroughControlHovered(false);
+    };
+    const onMouseOut = (event: MouseEvent) => {
+      if (event.relatedTarget === null) clearHover();
+    };
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseout", onMouseOut);
+    window.addEventListener("blur", clearHover);
+    return () => {
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseout", onMouseOut);
+      window.removeEventListener("blur", clearHover);
+    };
+  }, [clickThroughEnabled]);
+
   const setMousePassthrough = useCallback((enabled: boolean) => {
     window.questboard.window.setMousePassthrough(enabled).catch(console.error);
   }, []);
@@ -89,26 +152,36 @@ export function Overlay(): JSX.Element {
   useEffect(() => {
     // Default to click-through so transparent gaps do not block underlying apps.
     const dragging = Boolean(dragRef.current?.active);
-    const shouldPassthrough = !(dragEnabled || isInteractiveHover || dragging);
+    const shouldPassthrough =
+      clickThroughEnabled
+        ? !clickThroughControlHovered
+        : !(dragEnabled || isInteractiveHover || dragging);
     setMousePassthrough(shouldPassthrough);
     return () => setMousePassthrough(false);
-  }, [setMousePassthrough, dragEnabled, isInteractiveHover]);
+  }, [
+    setMousePassthrough,
+    dragEnabled,
+    isInteractiveHover,
+    clickThroughEnabled,
+    clickThroughControlHovered,
+  ]);
 
   useEffect(() => {
     if (!dragEnabled && dragRef.current?.active) {
       dragRef.current.active = false;
-      setSnapPreview(null);
     }
   }, [dragEnabled]);
 
   const onInteractiveEnter = () => {
     setIsInteractiveHover(true);
-    if (!dragEnabled) setMousePassthrough(false);
   };
   const onInteractiveLeave = () => {
     setIsInteractiveHover(false);
-    if (!dragEnabled) setMousePassthrough(true);
   };
+  const onToggleClickThrough = () =>
+    window.questboard.window
+      .setOverlayClickThrough(!clickThroughEnabled)
+      .catch(console.error);
   const onClose = () => window.questboard.window.closeSelf().catch(console.error);
   const onToggleAlwaysOnTop = () =>
     updateSettings({ alwaysOnTop: !(settings?.alwaysOnTop ?? true) });
@@ -135,14 +208,7 @@ export function Overlay(): JSX.Element {
       startWindowY: window.screenY,
       active: true,
     };
-    window.questboard.window
-      .getOverlaySnapPoints()
-      .then((points) => {
-        snapPointsRef.current = points;
-      })
-      .catch(console.error);
     event.preventDefault();
-    setSnapPreview(settings?.overlayAnchor ?? "right-top");
   };
 
   useEffect(() => {
@@ -153,64 +219,15 @@ export function Overlay(): JSX.Element {
       const x = Math.round(dragRef.current.startWindowX + deltaX);
       const y = Math.round(dragRef.current.startWindowY + deltaY);
       window.questboard.window.setOverlayPosition(x, y).catch(console.error);
-
-      if (settings?.overlayAnchor === "custom") {
-        setSnapPreview(null);
-        return;
-      }
-
-      const points = snapPointsRef.current;
-      if (!points) return;
-      let nearest: OverlayAnchor = "right-top";
-      let nearestDist = Number.POSITIVE_INFINITY;
-      for (const anchor of Object.keys(points) as Array<Exclude<OverlayAnchor, "custom">>) {
-        const px = points[anchor].x;
-        const py = points[anchor].y;
-        const dist = Math.hypot(px - x, py - y);
-        if (dist < nearestDist) {
-          nearestDist = dist;
-          nearest = anchor;
-        }
-      }
-      setSnapPreview(nearestDist <= SNAP_THRESHOLD ? nearest : null);
     };
     const onUp = () => {
       if (!dragRef.current?.active) return;
       dragRef.current.active = false;
-      if (settings?.overlayAnchor === "custom") {
-        updateSettings({
-          overlayAnchor: "custom",
-          overlayX: window.screenX,
-          overlayY: window.screenY,
-        });
-        setSnapPreview(null);
-        return;
-      }
-      const selected = snapPreview;
-      if (selected && selected !== "custom") {
-        const target = snapPointsRef.current?.[selected];
-        if (target) {
-          window.questboard.window.setOverlayPosition(target.x, target.y).catch(console.error);
-          updateSettings({
-            overlayAnchor: selected,
-            overlayX: null,
-            overlayY: null,
-          });
-        } else {
-          updateSettings({
-            overlayAnchor: "custom",
-            overlayX: window.screenX,
-            overlayY: window.screenY,
-          });
-        }
-      } else {
-        updateSettings({
-          overlayAnchor: "custom",
-          overlayX: window.screenX,
-          overlayY: window.screenY,
-        });
-      }
-      setSnapPreview(null);
+      updateSettings({
+        overlayAnchor: "custom",
+        overlayX: window.screenX,
+        overlayY: window.screenY,
+      });
     };
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
@@ -218,15 +235,20 @@ export function Overlay(): JSX.Element {
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseup", onUp);
     };
-  }, [updateSettings, snapPreview]);
+  }, [updateSettings]);
 
   return (
     <div
       ref={contentRef}
       className="overlay-scrollbar-hidden flex max-h-screen w-full flex-col items-end gap-3 overflow-x-hidden overflow-y-auto p-3"
-      style={{ height: "max-content" }}
+      style={{
+        height: "max-content",
+        opacity: idleDimmed ? 0.22 : 1,
+        transition: "opacity 350ms ease",
+      }}
     >
       <motion.div
+        ref={interactiveAreaRef}
         onMouseEnter={onInteractiveEnter}
         onMouseLeave={onInteractiveLeave}
         onMouseDown={onDragStart}
@@ -244,6 +266,12 @@ export function Overlay(): JSX.Element {
           collapsed={collapsed}
           alwaysOnTop={settings?.alwaysOnTop ?? true}
           showIconsOnHover={settings?.showIconsOnHover ?? true}
+          controlsVisible={isInteractiveHover}
+          clickThroughEnabled={clickThroughEnabled}
+          clickThroughControlRef={clickThroughControlRef}
+          onToggleClickThrough={onToggleClickThrough}
+          onClickThroughControlEnter={() => setClickThroughControlHovered(true)}
+          onClickThroughControlLeave={() => setClickThroughControlHovered(false)}
           onToggleDrag={() => setDragEnabled(!dragEnabled)}
           onToggleCollapsed={() => setCollapsed(!collapsed)}
           onToggleAlwaysOnTop={onToggleAlwaysOnTop}
@@ -310,6 +338,7 @@ export function Overlay(): JSX.Element {
                           onXpEventConsumed={clearXpEvent}
                           fontSize={settings?.fontSize ?? 14}
                           showIconsOnHover={settings?.showIconsOnHover ?? true}
+                          clickThroughEnabled={clickThroughEnabled}
                         />
                       </motion.div>
                     ))}

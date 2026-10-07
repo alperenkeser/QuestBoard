@@ -47,6 +47,8 @@ export interface SettingsRowDto {
   showIconsOnHover: 0 | 1;
   fontSize: number;
   widgetShowInOverlay: 0 | 1;
+  clickThroughShortcut: string;
+  overlayIdleDimMinutes: number;
 }
 
 export interface UserRowDto {
@@ -112,26 +114,14 @@ export interface QuestBoardBridge {
     focusMain: () => Promise<void>;
     focusOverlay: () => Promise<void>;
     setOverlayPosition: (x: number, y: number) => Promise<void>;
-    getOverlaySnapPoints: () => Promise<
-      Record<
-        Exclude<OverlayAnchor, "custom">,
-        { x: number; y: number }
-      >
-    >;
+    getOverlayClickThrough: () => Promise<boolean>;
+    setOverlayClickThrough: (enabled: boolean) => Promise<void>;
     setOverlayContentHeight: (height: number) => Promise<void>;
+    onOverlayClickThroughChanged: (callback: (enabled: boolean) => void) => () => void;
   };
   onDbChanged: (callback: () => void) => () => void;
   onOverlayPinChanged: (callback: (questId: string, pinned: boolean) => void) => () => void;
 }
-
-type OverlayAnchor =
-  | "right-top"
-  | "right-middle"
-  | "right-bottom"
-  | "left-top"
-  | "left-middle"
-  | "left-bottom"
-  | "custom";
 
 declare global {
   interface Window {

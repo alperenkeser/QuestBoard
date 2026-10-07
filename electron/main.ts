@@ -1,4 +1,13 @@
-import { app, BrowserWindow, globalShortcut, ipcMain, screen } from "electron";
+import {
+  app,
+  BrowserWindow,
+  globalShortcut,
+  ipcMain,
+  Menu,
+  nativeImage,
+  screen,
+  Tray,
+} from "electron";
 import path from "node:path";
 import { initDatabase } from "./database/sqlite";
 import { registerIpcHandlers } from "./ipc";
@@ -16,8 +25,11 @@ const OVERLAY_MARGIN = 16;
 
 let overlayWindow: BrowserWindow | null = null;
 let mainWindow: BrowserWindow | null = null;
-let registeredShortcut: string | null = null;
+let tray: Tray | null = null;
+let registeredShortcuts: string[] = [];
 let overlayContentHeight = OVERLAY_HEIGHT;
+let overlayClickThroughEnabled = false;
+let isQuitting = false;
 
 function loadRenderer(win: BrowserWindow, query?: Record<string, string>): void {
   if (devServerUrl) {
@@ -53,6 +65,14 @@ function createMainWindow(): void {
 
   secureRendererNavigation(mainWindow);
   loadRenderer(mainWindow);
+  mainWindow.on("minimize", () => {
+    mainWindow?.hide();
+  });
+  mainWindow.on("close", (event) => {
+    if (isQuitting) return;
+    event.preventDefault();
+    mainWindow?.hide();
+  });
   mainWindow.on("closed", () => {
     mainWindow = null;
   });
@@ -74,6 +94,37 @@ function focusOverlayWindow(): void {
   }
   overlayWindow.show();
   overlayWindow.focus();
+}
+
+function createTray(): void {
+  const iconPath = path.join(__dirname, "assets", "questboard-icon.png");
+  tray = new Tray(nativeImage.createFromPath(iconPath).resize({ width: 16, height: 16 }));
+  tray.setToolTip("QuestBoard");
+  tray.setContextMenu(
+    Menu.buildFromTemplate([
+      { label: "QuestBoard'ı Aç", click: focusMainWindow },
+      { label: "Widget'ı Göster", click: focusOverlayWindow },
+      { type: "separator" },
+      {
+        label: "Çıkış",
+        click: () => {
+          isQuitting = true;
+          app.quit();
+        },
+      },
+    ])
+  );
+  tray.on("click", focusMainWindow);
+}
+
+function setOverlayClickThrough(enabled: boolean): void {
+  overlayClickThroughEnabled = enabled;
+  if (overlayWindow && !overlayWindow.isDestroyed()) {
+    overlayWindow.setIgnoreMouseEvents(enabled, { forward: true });
+  }
+  for (const win of BrowserWindow.getAllWindows()) {
+    win.webContents.send("window:overlayClickThroughChanged", enabled);
+  }
 }
 
 function moveOverlayWindow(x: number, y: number): void {
@@ -130,31 +181,6 @@ function resolveOverlayPosition(
   return { x, y: yByAnchor[settings.overlayAnchor] ?? workArea.y + OVERLAY_MARGIN, width, height };
 }
 
-function getOverlaySnapPoints(): Record<
-  "right-top" | "right-middle" | "right-bottom" | "left-top" | "left-middle" | "left-bottom",
-  { x: number; y: number }
-> {
-  const bounds = overlayWindow?.getBounds();
-  const display = bounds ? screen.getDisplayMatching(bounds) : screen.getPrimaryDisplay();
-  const { workArea } = display;
-  const width = Math.min(bounds?.width ?? OVERLAY_WIDTH, workArea.width - OVERLAY_MARGIN * 2);
-  const height = Math.min(bounds?.height ?? OVERLAY_HEIGHT, workArea.height - OVERLAY_MARGIN * 2);
-  const leftX = workArea.x + OVERLAY_MARGIN;
-  const rightX = workArea.x + workArea.width - width - OVERLAY_MARGIN;
-  const topY = workArea.y + OVERLAY_MARGIN;
-  const middleY = workArea.y + Math.round((workArea.height - height) / 2);
-  const bottomY = workArea.y + workArea.height - height - OVERLAY_MARGIN;
-
-  return {
-    "right-top": { x: rightX, y: topY },
-    "right-middle": { x: rightX, y: middleY },
-    "right-bottom": { x: rightX, y: bottomY },
-    "left-top": { x: leftX, y: topY },
-    "left-middle": { x: leftX, y: middleY },
-    "left-bottom": { x: leftX, y: bottomY },
-  };
-}
-
 function setOverlayBounds(bounds: Electron.Rectangle): void {
   if (!overlayWindow) return;
   const currentBounds = overlayWindow.getBounds();
@@ -198,29 +224,38 @@ function applyRuntimeSettings(settings: SettingsRow): void {
   }
 
   if (!app.isReady()) return;
-  if (registeredShortcut) {
-    globalShortcut.unregister(registeredShortcut);
-    registeredShortcut = null;
-  }
+  registeredShortcuts.forEach((shortcut) => globalShortcut.unregister(shortcut));
+  registeredShortcuts = [];
 
   const shortcut = settings.shortcut.trim() || "CTRL+ALT+Q";
-  try {
-    const registered = globalShortcut.register(shortcut, () => {
-      if (!mainWindow) return;
-      if (mainWindow.isVisible() && mainWindow.isFocused()) {
-        mainWindow.minimize();
+  const clickThroughShortcut = settings.clickThroughShortcut.trim() || "CTRL+ALT+P";
+  const registerShortcut = (accelerator: string, action: () => void) => {
+    try {
+      const registered = globalShortcut.register(accelerator, action);
+      if (registered) {
+        registeredShortcuts.push(accelerator);
       } else {
-        mainWindow.show();
-        mainWindow.focus();
+        console.error(`Failed to register shortcut: ${accelerator}`);
       }
-    });
-    if (registered) {
-      registeredShortcut = shortcut;
-    } else {
-      console.error(`Failed to register shortcut: ${shortcut}`);
+    } catch (error) {
+      console.error("Invalid global shortcut:", accelerator, error);
     }
-  } catch (error) {
-    console.error("Invalid global shortcut:", shortcut, error);
+  };
+  registerShortcut(shortcut, () => {
+    if (!mainWindow) return;
+    if (mainWindow.isVisible() && mainWindow.isFocused()) {
+      mainWindow.minimize();
+    } else {
+      mainWindow.show();
+      mainWindow.focus();
+    }
+  });
+  if (clickThroughShortcut.toLowerCase() === shortcut.toLowerCase()) {
+    console.error("Click-through shortcut must differ from the Quest Manager shortcut.");
+  } else {
+    registerShortcut(clickThroughShortcut, () =>
+      setOverlayClickThrough(!overlayClickThroughEnabled)
+    );
   }
 }
 
@@ -261,6 +296,14 @@ function createOverlayWindow(settings: SettingsRow): void {
 
   secureRendererNavigation(overlayWindow);
   loadRenderer(overlayWindow, { window: "overlay" });
+  overlayWindow.webContents.on("did-finish-load", () => {
+    if (!overlayWindow || overlayWindow.isDestroyed()) return;
+    overlayWindow.setIgnoreMouseEvents(overlayClickThroughEnabled, { forward: true });
+    overlayWindow.webContents.send(
+      "window:overlayClickThroughChanged",
+      overlayClickThroughEnabled
+    );
+  });
 
   overlayWindow.on("closed", () => {
     overlayWindow = null;
@@ -275,18 +318,22 @@ app.whenReady().then(() => {
       assertTrustedIpcSender(event);
       resizeOverlayToContent(height);
     });
-    ipcMain.handle("window:getOverlaySnapPoints", (event) => {
+    ipcMain.handle("window:getOverlayClickThrough", (event) => {
       assertTrustedIpcSender(event);
-      return getOverlaySnapPoints();
+      return overlayClickThroughEnabled;
+    });
+    ipcMain.handle("window:setOverlayClickThrough", (event, enabled: boolean) => {
+      assertTrustedIpcSender(event);
+      setOverlayClickThrough(Boolean(enabled));
     });
     registerIpcHandlers({
       onSettingsUpdated: applyRuntimeSettings,
       focusMainWindow,
       focusOverlayWindow,
       moveOverlayWindow,
-      getOverlaySnapPoints,
     });
     applyRuntimeSettings(settings);
+    createTray();
     createMainWindow();
     createOverlayWindow(settings);
   } catch (err) {
@@ -306,14 +353,19 @@ app.whenReady().then(() => {
 });
 
 app.on("window-all-closed", () => {
-  if (process.platform !== "darwin") {
+  if (process.platform !== "darwin" && !tray) {
     app.quit();
   }
 });
 
+app.on("before-quit", () => {
+  isQuitting = true;
+});
+
 app.on("will-quit", () => {
-  if (registeredShortcut) {
-    globalShortcut.unregister(registeredShortcut);
-  }
+  registeredShortcuts.forEach((shortcut) => globalShortcut.unregister(shortcut));
+  registeredShortcuts = [];
   globalShortcut.unregisterAll();
+  tray?.destroy();
+  tray = null;
 });

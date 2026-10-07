@@ -19,6 +19,7 @@ interface QuestCardProps {
   onXpEventConsumed?: (subtaskId: string) => void;
   fontSize?: number;
   showIconsOnHover?: boolean;
+  clickThroughEnabled?: boolean;
 }
 
 /**
@@ -37,6 +38,7 @@ export function QuestCard({
   onXpEventConsumed,
   fontSize = 14,
   showIconsOnHover = true,
+  clickThroughEnabled = false,
 }: QuestCardProps): JSX.Element {
   const t = useTranslation();
   const handleComplete = () => {
@@ -72,7 +74,7 @@ export function QuestCard({
             </h3>
           )}
         </div>
-        <div className="flex items-center">
+        {!clickThroughEnabled && (
           <button
             type="button"
             onClick={() => onRemoveFromOverlay(quest.id)}
@@ -92,7 +94,7 @@ export function QuestCard({
               <path d="m6 6 12 12M18 6 6 18" />
             </svg>
           </button>
-        </div>
+        )}
       </div>
 
       {!collapsed && (
@@ -133,7 +135,7 @@ export function QuestCard({
               />
             ))}
           </div>
-          {quest.status !== "Completed" && (
+          {quest.status !== "Completed" && !clickThroughEnabled && (
             <div className="mt-3 flex justify-end">
               <button
                 type="button"

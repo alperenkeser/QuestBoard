@@ -42,6 +42,8 @@ export interface SettingsRow {
   showIconsOnHover: 0 | 1;
   fontSize: number;
   widgetShowInOverlay: 0 | 1;
+  clickThroughShortcut: string;
+  overlayIdleDimMinutes: number;
 }
 
 export interface UserRow {

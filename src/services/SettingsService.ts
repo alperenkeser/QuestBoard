@@ -23,6 +23,8 @@ function toSettings(row: SettingsRowDto): Settings {
     language: row.language,
     showIconsOnHover: row.showIconsOnHover === 1,
     fontSize: row.fontSize,
+    clickThroughShortcut: row.clickThroughShortcut,
+    overlayIdleDimMinutes: row.overlayIdleDimMinutes,
   };
 }
 
@@ -44,6 +46,12 @@ function toRowPatch(patch: Partial<Settings>): Partial<SettingsRowDto> {
     ...(patch.language !== undefined && { language: patch.language }),
     ...(patch.showIconsOnHover !== undefined && { showIconsOnHover: patch.showIconsOnHover ? 1 : 0 }),
     ...(patch.fontSize !== undefined && { fontSize: patch.fontSize }),
+    ...(patch.clickThroughShortcut !== undefined && {
+      clickThroughShortcut: patch.clickThroughShortcut,
+    }),
+    ...(patch.overlayIdleDimMinutes !== undefined && {
+      overlayIdleDimMinutes: patch.overlayIdleDimMinutes,
+    }),
   };
 }
 

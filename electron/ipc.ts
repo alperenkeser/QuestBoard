@@ -25,10 +25,6 @@ interface RegisterIpcHandlersOptions {
   focusMainWindow?: () => void;
   focusOverlayWindow?: () => void;
   moveOverlayWindow?: (x: number, y: number) => void;
-  getOverlaySnapPoints?: () => Record<
-    "right-top" | "right-middle" | "right-bottom" | "left-top" | "left-middle" | "left-bottom",
-    { x: number; y: number }
-  >;
 }
 
 /** Notifies every open window that persisted data changed, so each renderer can re-hydrate its store. */
@@ -82,11 +78,6 @@ export function registerIpcHandlers(options: RegisterIpcHandlersOptions = {}): v
   ipcMain.handle("window:setOverlayPosition", (event, x: number, y: number) => {
     assertTrustedIpcSender(event);
     options.moveOverlayWindow?.(x, y);
-  });
-
-  ipcMain.handle("window:getOverlaySnapPoints", (event) => {
-    assertTrustedIpcSender(event);
-    return options.getOverlaySnapPoints?.();
   });
 
   ipcMain.handle("quests:getAllWithSubtasks", (event) => {

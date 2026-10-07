@@ -27,4 +27,6 @@ export interface Settings {
   language: string;
   showIconsOnHover: boolean;
   fontSize: number;
+  clickThroughShortcut: string;
+  overlayIdleDimMinutes: number;
 }

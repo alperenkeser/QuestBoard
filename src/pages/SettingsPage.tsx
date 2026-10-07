@@ -64,16 +64,43 @@ export function SettingsPage(): JSX.Element {
   const updateSettings = useSettingsStore((s) => s.updateSettings);
   const t = useTranslation();
   const [shortcutDraft, setShortcutDraft] = useState(settings?.shortcut ?? "");
+  const [clickThroughShortcutDraft, setClickThroughShortcutDraft] = useState(
+    settings?.clickThroughShortcut ?? "CTRL+ALT+P"
+  );
   const [fontSizeDraft, setFontSizeDraft] = useState(String(settings?.fontSize ?? 14));
+  const [idleDimMinutesDraft, setIdleDimMinutesDraft] = useState(
+    String(settings?.overlayIdleDimMinutes ?? 5)
+  );
+  const [clickThroughEnabled, setClickThroughEnabled] = useState(false);
   const [columnDraft, setColumnDraft] = useState<Settings["boardColumns"]>([]);
 
   useEffect(() => {
     if (settings) {
       setShortcutDraft(settings.shortcut);
+      setClickThroughShortcutDraft(settings.clickThroughShortcut);
       setFontSizeDraft(String(settings.fontSize));
+      setIdleDimMinutesDraft(String(settings.overlayIdleDimMinutes));
       setColumnDraft(settings.boardColumns);
     }
   }, [settings]);
+
+  useEffect(() => {
+    let receivedChange = false;
+    const updateClickThrough = (enabled: boolean) => {
+      receivedChange = true;
+      setClickThroughEnabled(enabled);
+    };
+    const unsubscribe = window.questboard.window.onOverlayClickThroughChanged(
+      updateClickThrough
+    );
+    window.questboard.window
+      .getOverlayClickThrough()
+      .then((enabled) => {
+        if (!receivedChange) setClickThroughEnabled(enabled);
+      })
+      .catch(console.error);
+    return unsubscribe;
+  }, []);
 
   if (!settings) {
     return (
@@ -104,6 +131,19 @@ export function SettingsPage(): JSX.Element {
     const fontSize = Math.min(36, Math.max(8, Math.round(parsed)));
     setFontSizeDraft(String(fontSize));
     if (fontSize !== settings.fontSize) updateAndSync({ fontSize });
+  };
+
+  const saveIdleDimMinutes = () => {
+    const parsed = Number(idleDimMinutesDraft);
+    if (idleDimMinutesDraft.trim() === "" || !Number.isFinite(parsed)) {
+      setIdleDimMinutesDraft(String(settings.overlayIdleDimMinutes));
+      return;
+    }
+    const minutes = parsed === 0 ? 0 : Math.min(60, Math.max(1, Math.round(parsed)));
+    setIdleDimMinutesDraft(String(minutes));
+    if (minutes !== settings.overlayIdleDimMinutes) {
+      updateAndSync({ overlayIdleDimMinutes: minutes });
+    }
   };
 
   const saveColumnTitle = (id: string, title: string) => {
@@ -236,6 +276,14 @@ export function SettingsPage(): JSX.Element {
           onChange={(showIconsOnHover) => updateAndSync({ showIconsOnHover })}
         />
         <ToggleRow
+          label={t("clickThrough")}
+          description={`${t("clickThroughHint")} (${settings.clickThroughShortcut})`}
+          checked={clickThroughEnabled}
+          onChange={(enabled) =>
+            window.questboard.window.setOverlayClickThrough(enabled).catch(console.error)
+          }
+        />
+        <ToggleRow
           label={t("alwaysOnTop")}
           description={t("alwaysOnTopHint")}
           checked={settings.alwaysOnTop}
@@ -314,17 +362,54 @@ export function SettingsPage(): JSX.Element {
       </div>
 
       <div className="rounded-xl border border-hud-border bg-hud-bg p-4 backdrop-blur-hud">
-        <label className="mb-1 block text-xs font-medium text-white/60">Quick Toggle Shortcut</label>
-        <input
-          value={shortcutDraft}
-          onChange={(e) => setShortcutDraft(e.target.value)}
-          onBlur={() => updateAndSync({ shortcut: shortcutDraft })}
-          placeholder="CTRL+ALT+Q"
-          className="w-full rounded-lg border border-hud-border bg-hud-bg px-3 py-2 text-sm text-white placeholder:text-white/40 outline-none focus:border-sky-400/60"
-        />
-        <p className="mt-2 text-xs text-white/45">
-          Saved shortcut is registered globally to toggle/focus the Quest Manager window.
-        </p>
+        <div className="grid gap-4 md:grid-cols-2">
+          <div>
+            <label className="mb-1 block text-xs font-medium text-white/60">Quick Toggle Shortcut</label>
+            <input
+              value={shortcutDraft}
+              onChange={(e) => setShortcutDraft(e.target.value)}
+              onBlur={() => updateAndSync({ shortcut: shortcutDraft })}
+              placeholder="CTRL+ALT+Q"
+              className="w-full rounded-lg border border-hud-border bg-hud-bg px-3 py-2 text-sm text-white placeholder:text-white/40 outline-none focus:border-sky-400/60"
+            />
+            <p className="mt-2 text-xs text-white/45">
+              Saved shortcut is registered globally to toggle/focus the Quest Manager window.
+            </p>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-white/60">
+              {t("clickThroughShortcut")}
+            </label>
+            <input
+              value={clickThroughShortcutDraft}
+              onChange={(e) => setClickThroughShortcutDraft(e.target.value)}
+              onBlur={() => updateAndSync({ clickThroughShortcut: clickThroughShortcutDraft })}
+              placeholder="CTRL+ALT+P"
+              className="w-full rounded-lg border border-hud-border bg-hud-bg px-3 py-2 text-sm text-white placeholder:text-white/40 outline-none focus:border-sky-400/60"
+            />
+            <p className="mt-2 text-xs text-white/45">{t("clickThroughHint")}</p>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-white/60">
+              {t("idleDimMinutes")}
+            </label>
+            <input
+              type="number"
+              min={0}
+              max={60}
+              step={1}
+              value={idleDimMinutesDraft}
+              onChange={(e) => setIdleDimMinutesDraft(e.target.value)}
+              onBlur={saveIdleDimMinutes}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") e.currentTarget.blur();
+              }}
+              aria-label={t("idleDimMinutes")}
+              className="w-full rounded-lg border border-hud-border bg-hud-bg px-3 py-2 text-sm text-white outline-none focus:border-sky-400/60"
+            />
+            <p className="mt-2 text-xs text-white/45">{t("idleDimHint")}</p>
+          </div>
+        </div>
       </div>
 
       <motion.div

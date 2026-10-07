@@ -45,9 +45,16 @@ contextBridge.exposeInMainWorld("questboard", {
     focusOverlay: () => ipcRenderer.invoke("window:focusOverlay"),
     setOverlayPosition: (x: number, y: number) =>
       ipcRenderer.invoke("window:setOverlayPosition", x, y),
-    getOverlaySnapPoints: () => ipcRenderer.invoke("window:getOverlaySnapPoints"),
+    getOverlayClickThrough: () => ipcRenderer.invoke("window:getOverlayClickThrough"),
+    setOverlayClickThrough: (enabled: boolean) =>
+      ipcRenderer.invoke("window:setOverlayClickThrough", enabled),
     setOverlayContentHeight: (height: number) =>
       ipcRenderer.invoke("window:setOverlayContentHeight", height),
+    onOverlayClickThroughChanged: (callback: (enabled: boolean) => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, enabled: boolean) => callback(enabled);
+      ipcRenderer.on("window:overlayClickThroughChanged", listener);
+      return () => ipcRenderer.removeListener("window:overlayClickThroughChanged", listener);
+    },
   },
   onDbChanged: (callback: () => void) => {
     const listener = () => callback();

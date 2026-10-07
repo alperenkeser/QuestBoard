@@ -65,7 +65,9 @@ CREATE TABLE IF NOT EXISTS settings (
   language TEXT NOT NULL DEFAULT 'tr',
   showIconsOnHover INTEGER NOT NULL DEFAULT 1,
   fontSize INTEGER NOT NULL DEFAULT 14,
-  widgetShowInOverlay INTEGER NOT NULL DEFAULT 1
+  widgetShowInOverlay INTEGER NOT NULL DEFAULT 1,
+  clickThroughShortcut TEXT NOT NULL DEFAULT 'CTRL+ALT+P',
+  overlayIdleDimMinutes INTEGER NOT NULL DEFAULT 5
 );
 
 CREATE TABLE IF NOT EXISTS achievements (
